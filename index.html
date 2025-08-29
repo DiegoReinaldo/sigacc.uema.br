@@ -21,7 +21,6 @@
         <div class="circle circle-2"></div>
         <div class="circle circle-3"></div>
     </div>
-
     <div class="login-container" id="loginScreen">
         <div class="login-header">
             <div class="logo">
@@ -30,22 +29,33 @@
             <h2 id="loginTitle">Login</h2>
             <p>Acesse suas atividades complementares</p>
         </div>
-
         <div id="errorMessage" class="message error-message">
             <i class="fas fa-exclamation-circle"></i>
             <span>Usuário ou senha inválidos!</span>
         </div>
-
         <div id="successMessage" class="message success-message">
             <i class="fas fa-check-circle"></i>
             <span>Registro realizado com sucesso!</span>
         </div>
-
         <form id="loginForm">
             <div class="form-group">
                 <label for="username">Usuário</label>
                 <i class="fas fa-user input-icon"></i>
                 <input type="text" id="username" placeholder="Digite seu usuário" required>
+            </div>
+
+            <!-- Campos de registro (inicialmente ocultos) -->
+            <div id="registrationFields" class="registration-fields">
+                <div class="form-group">
+                    <label for="nomeCompleto">Nome Completo</label>
+                    <i class="fas fa-user-circle input-icon"></i>
+                    <input type="text" id="nomeCompleto" placeholder="Digite seu nome completo">
+                </div>
+                <div class="form-group">
+                    <label for="matricula">Matrícula</label>
+                    <i class="fas fa-id-card input-icon"></i>
+                    <input type="text" id="matricula" placeholder="Digite sua matrícula (11 dígitos)" maxlength="11">
+                </div>
             </div>
 
             <div class="form-group">
@@ -54,14 +64,11 @@
                 <input type="password" id="password" placeholder="Digite sua senha" required>
                 <i class="fas fa-eye password-toggle" id="togglePassword"></i>
             </div>
-
             <button type="submit" class="login-btn" id="submitBtn">Entrar</button>
         </form>
-
         <div class="divider">
             <span>ou</span>
         </div>
-
         <div class="login-links">
             <a href="#" class="link-item" id="toggleLink">
                 <i class="fas fa-user-plus"></i> Não tem conta? Registre-se
@@ -69,12 +76,11 @@
             <a href="#" class="link-item" id="aboutLink">
                 <i class="fas fa-info-circle"></i> Sobre o sistema
             </a>
-            <a href="https://www.engproducao.uema.br/wp-content/uploads/2021/09/RESOLUÇÃO-DE-ATIVIDADES-COMPLEMENTARES-2021.pdf"
+            <a href="https://www.engproducao.uema.br/wp-content/uploads/2021/09/RESOLU%C3%87%C3%83O-DE-ATIVIDADES-COMPLEMENTARES-2021.pdf"
                 class="link-item" target="_blank">
                 <i class="fas fa-file-pdf"></i> Resolução de Atividades Complementares
             </a>
         </div>
-
         <div class="login-footer">
             <p>SIGACC - Desenvolvido por Diego Bezerra Reinaldo © 2025</p>
         </div>
@@ -216,14 +222,14 @@
                 <table class="activities-table" id="activitiesTable">
                     <!-- Colgroup permite controle direto das larguras das colunas -->
                     <colgroup>
-                        <col style="width:300px">
-                        <col style="width:300px">
-                        <col style="width:150px">
-                        <col style="width:150px">
-                        <col style="width:150px">
-                        <col style="width:150px">
-                        <col style="width:150px">
-                        <col style="width:150px">
+                        <col style="width:400px">
+                        <col style="width:375px">
+                        <col style="width:100px">
+                        <col style="width:100px">
+                        <col style="width:100px">
+                        <col style="width:125px">
+                        <col style="width:100px">
+                        <col style="width:100px">
                     </colgroup>
 
                     <thead>
@@ -305,7 +311,7 @@
                     </div>
 
                     <div class="form-actions">
-                        <button type="submit" class="form-btn primary">
+                        <button type="submit" class="form-btn primary" id="submitEdicaoBtn">
                             <i class="fas fa-save"></i> Salvar Alterações
                         </button>
                         <button type="button" class="form-btn secondary" id="cancelarEdicaoBtn">
@@ -519,6 +525,5 @@
         })();
     </script>
 </body>
-
 
 </html>
