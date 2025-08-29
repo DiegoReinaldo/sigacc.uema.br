@@ -746,6 +746,9 @@ function logout() {
         document.getElementById("formCadastro").reset();
 
         hideMessages();
+
+        submitBtn.innerHTML = 'Entrar';
+        submitBtn.disabled = false;
     }
 }
 
@@ -2354,3 +2357,4 @@ function showSystemMessage(message, type) {
         messageContainer.remove();
     }, 5000);
 }
+
