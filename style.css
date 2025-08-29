@@ -21,11 +21,7 @@
     --warning: #ffc107;
     --danger: #dc3545;
     --light-danger: #f85767;
-    /* 90% mais claro que --danger */
     --dark-danger: #b02a37;
-    /* 20% mais escuro que --danger */
-
-    /* Cores para o Estilo Pendente*/
     --pending: #ffc107;
     --light-pending: #fff3cd;
     --dark-pending: #856404;
@@ -348,6 +344,10 @@ body {
     border-top: 1px solid var(--light-gray);
     color: var(--dark-gray);
     font-size: clamp(0.8rem, 3vw, 0.9rem);
+}
+
+.registration-fields {
+    display: none;
 }
 
 #mainScreen {
