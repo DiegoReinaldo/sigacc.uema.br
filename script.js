@@ -335,7 +335,11 @@ const configAtividades = { // Traz todas as configurações necessárias para o 
 
 // Estado da aplicação
 let db;
-let currentUser = null;
+let currentUser = {
+    username: null,
+    nomeCompleto: null,
+    matricula: null
+};
 let isDev = false;
 let horasChart = null;
 
@@ -348,6 +352,27 @@ request.onupgradeneeded = function (event) {
     // Criar/atualizar object store de usuários
     if (!db.objectStoreNames.contains("usuarios")) {
         db.createObjectStore("usuarios", { keyPath: "username" });
+    } else {
+        // Atualizar a estrutura se necessário
+        const transaction = event.target.transaction;
+        const store = transaction.objectStore("usuarios");
+
+        // Verificar se precisamos adicionar os novos campos aos usuários existentes
+        store.openCursor().onsuccess = function (e) {
+            const cursor = e.target.result;
+            if (cursor) {
+                const user = cursor.value;
+                // Adicionar campos se não existirem
+                if (user.nomeCompleto === undefined) {
+                    user.nomeCompleto = "";
+                }
+                if (user.matricula === undefined) {
+                    user.matricula = "";
+                }
+                cursor.update(user);
+                cursor.continue();
+            }
+        };
     }
 
     // Criar/atualizar object store de atividades
@@ -513,14 +538,30 @@ function handleLoginSubmit(e) {
     e.preventDefault();
     const username = document.getElementById("username").value.trim();
     const password = document.getElementById("password").value.trim();
+    const isLoginMode = document.getElementById("loginTitle").textContent === "Login";
 
     if (!username || !password) {
         showError('Por favor, preencha todos os campos.');
         return;
     }
 
-    hideMessages();
+    // Validações específicas para registro
+    if (!isLoginMode) {
+        const nomeCompleto = document.getElementById("nomeCompleto").value.trim();
+        const matricula = document.getElementById("matricula").value.trim();
 
+        if (!nomeCompleto || !matricula) {
+            showError('Por favor, preencha todos os campos.');
+            return;
+        }
+
+        if (!validarMatricula(matricula)) {
+            showError('Matrícula inválida');
+            return;
+        }
+    }
+
+    hideMessages();
     const submitBtn = document.getElementById("submitBtn");
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
     submitBtn.disabled = true;
@@ -531,16 +572,19 @@ function handleLoginSubmit(e) {
         let req = store.get(username);
 
         req.onsuccess = function (event) {
-            const isLoginMode = document.getElementById("loginTitle").textContent === "Login";
-            let user = event.target.result;
+            const user = event.target.result;
 
             if (username === "admin" && password === "admin") {
                 isDev = true;
-                currentUser = username;
+                currentUser = {
+                    username: "admin",
+                    nomeCompleto: "Administrador do Sistema",
+                    matricula: ""
+                };
                 iniciarApp();
             } else if (isLoginMode) {
                 if (user && user.password === password) {
-                    currentUser = username;
+                    currentUser = user;
                     iniciarApp();
                 } else {
                     showError("Usuário ou senha inválidos!");
@@ -548,6 +592,7 @@ function handleLoginSubmit(e) {
                     submitBtn.disabled = false;
                 }
             } else {
+                // Modo de registro
                 if (user) {
                     showError("Usuário já existe!");
                     submitBtn.innerHTML = 'Registrar';
@@ -555,7 +600,17 @@ function handleLoginSubmit(e) {
                 } else {
                     let trans = db.transaction("usuarios", "readwrite");
                     let storeWrite = trans.objectStore("usuarios");
-                    storeWrite.add({ username, password });
+
+                    // Coletar dados adicionais do registro
+                    const nomeCompleto = document.getElementById("nomeCompleto").value.trim();
+                    const matricula = document.getElementById("matricula").value.trim();
+
+                    storeWrite.add({
+                        username,
+                        password,
+                        nomeCompleto,
+                        matricula
+                    });
 
                     setTimeout(() => {
                         toggleLoginMode();
@@ -569,7 +624,6 @@ function handleLoginSubmit(e) {
         };
 
         req.onerror = function () {
-            const isLoginMode = document.getElementById("loginTitle").textContent === "Login";
             showError("Erro ao acessar o banco de dados");
             submitBtn.innerHTML = isLoginMode ? 'Entrar' : 'Registrar';
             submitBtn.disabled = false;
@@ -577,19 +631,47 @@ function handleLoginSubmit(e) {
     }, 1000);
 }
 
+// Função para validar matrícula
+function validarMatricula(matricula) {
+    // Deve ter exatamente 11 dígitos
+    if (!/^\d{11}$/.test(matricula)) {
+        return false;
+    }
+
+    // Verifica o ano atual
+    const anoAtual = new Date().getFullYear()
+
+    // Os 4 primeiros dígitos devem ser um ano entre 2000 e ano atual
+    const ano = parseInt(matricula.substring(0, 4), 10);
+    return ano >= 2000 && ano <= anoAtual;
+}
+
 function toggleLoginMode() {
     const loginTitle = document.getElementById("loginTitle");
     const submitBtn = document.getElementById("submitBtn");
     const toggleLink = document.getElementById("toggleLink");
+    const registrationFields = document.getElementById("registrationFields");
 
     if (loginTitle.textContent === "Login") {
+        // Mudar para modo de registro
         loginTitle.textContent = "Registro";
         submitBtn.textContent = "Registrar";
         toggleLink.innerHTML = '<i class="fas fa-sign-in-alt"></i> Voltar para login';
+        registrationFields.style.display = "block";
+
+        // Tornar campos de registro obrigatórios
+        document.getElementById("nomeCompleto").setAttribute("required", "true");
+        document.getElementById("matricula").setAttribute("required", "true");
     } else {
+        // Mudar para modo de login
         loginTitle.textContent = "Login";
         submitBtn.textContent = "Entrar";
         toggleLink.innerHTML = '<i class="fas fa-user-plus"></i> Não tem conta? Registre-se';
+        registrationFields.style.display = "none";
+
+        // Remover obrigatoriedade dos campos de registro
+        document.getElementById("nomeCompleto").removeAttribute("required");
+        document.getElementById("matricula").removeAttribute("required");
     }
     hideMessages();
 }
@@ -607,7 +689,8 @@ function togglePasswordVisibility() {
 function iniciarApp() {
     document.getElementById("loginScreen").style.display = "none";
     document.getElementById("mainScreen").style.display = "block";
-    document.getElementById("userName").textContent = currentUser;
+    document.getElementById("userName").textContent =
+        currentUser.nomeCompleto || currentUser.username || currentUser;
 
     popularSelects();
     atualizarTabela();
@@ -652,17 +735,15 @@ function removerAbaDesenvolvedor() {
 
 function logout() {
     if (confirm("Tem certeza que deseja sair do sistema?")) {
-        removerAbaDesenvolvedor();
-        currentUser = null;
+        currentUser = null; // Isso já existe
         isDev = false;
-        document.getElementById("mainScreen").style.display = "none";
+        // Adicione também:
         document.getElementById("loginScreen").style.display = "block";
-        document.getElementById("username").value = "";
-        document.getElementById("password").value = "";
+        document.getElementById("mainScreen").style.display = "none";
 
-        const submitBtn = document.getElementById("submitBtn");
-        submitBtn.innerHTML = 'Entrar';
-        submitBtn.disabled = false;
+        // Limpe os formulários
+        document.getElementById("loginForm").reset();
+        document.getElementById("formCadastro").reset();
 
         hideMessages();
     }
@@ -721,8 +802,11 @@ async function handleCadastroSubmit(e) { // Cadastro de atividades
         return;
     }
 
-    if (!validarPeriodo(periodo)) {
-        showSystemMessage("Período inválido. Formato esperado: AAAA.S (ex: 2025.1) com ano entre 2000-2100", "error");
+    // Usar currentUser.matricula em vez da variável não definida 'matricula'
+    if (!validarPeriodo(periodo, currentUser.matricula)) {
+        const anoAtual = new Date().getFullYear();
+        const anoIngresso = parseInt(currentUser.matricula.substring(0, 4), 10);
+        showSystemMessage(`Período inválido. Formato esperado: AAAA.S (ex: 2025.1) com ano entre ${anoIngresso}-${anoAtual}`, "error");
         return;
     }
 
@@ -746,7 +830,7 @@ async function handleCadastroSubmit(e) { // Cadastro de atividades
         }
 
         const novaAtividade = {
-            usuario: currentUser,
+            usuario: currentUser.username,
             nome,
             tipo,
             horasRegistradas: horas,
@@ -782,12 +866,26 @@ async function handleCadastroSubmit(e) { // Cadastro de atividades
     }
 }
 
-function validarPeriodo(periodo) { // Função auxiliar para validar o formato do período
+function validarPeriodo(periodo, matricula) {
+    // Função auxiliar para validar o formato do período
+    const anoAtual = new Date().getFullYear();
+
     if (typeof periodo !== 'string') return false;
+
+    if (!matricula || matricula.length < 4) return false;
+
+    // Verifica formato AAAA.1 ou AAAA.2
     const regex = /^\d{4}\.[12]$/;
     if (!regex.test(periodo)) return false;
+
+    // Extrai ano do período
     const ano = parseInt(periodo.split('.')[0], 10);
-    return ano >= 2000 && ano <= 2100;
+
+    // Extrai ano de ingresso do estudante a partir da matrícula (4 primeiros dígitos)
+    const anoIngresso = parseInt(matricula.substring(0, 4), 10);
+
+    // O período só é válido se estiver entre o ano de ingresso e o ano atual
+    return ano >= anoIngresso && ano <= anoAtual;
 }
 
 async function calcularHorasValidadas(tipo, horas, periodo, comprovante, excludeId = null) { // Função calcularHorasValidadas atualizada
@@ -832,7 +930,7 @@ async function consultarHorasCadastradasGlobal(tipo, excludeId = null) { // Fun�
                 const atividade = cursor.value;
 
                 if (atividade.tipo === tipo &&
-                    atividade.usuario === currentUser &&
+                    atividade.usuario === currentUser.username &&
                     (!excludeId || atividade.id !== excludeId)) {
                     totalHoras += atividade.horasValidadas;
                 }
@@ -872,7 +970,7 @@ async function consultarHorasCadastradasGrupo(grupo, excludeId = null) { //Funç
                 const atividadeGrupo = obterGrupoPorTipo(atividade.tipo);
 
                 if (atividadeGrupo === grupo &&
-                    atividade.usuario === currentUser &&
+                    atividade.usuario === currentUser.username &&
                     (!excludeId || atividade.id !== excludeId)) {
                     totalHoras += atividade.horasValidadas;
                 }
@@ -905,7 +1003,7 @@ async function consultarHorasPorGrupo(grupo, excludeId = null) { // Função par
                 // Verificar se a atividade pertence ao grupo especificado
                 const grupoAtividade = obterGrupoPorTipo(atividade.tipo);
                 const mesmoGrupo = grupoAtividade === grupo;
-                const mesmoUsuario = atividade.usuario === currentUser;
+                const mesmoUsuario = atividade.usuario === currentUser.username;
                 const naoExcluida = !excludeId || atividade.id !== excludeId;
 
                 if (mesmoGrupo && mesmoUsuario && naoExcluida) {
@@ -952,7 +1050,7 @@ async function consultarHorasPorTipo(tipo, periodo = null, excludeId = null) { /
 
                 const mesmoTipo = atividade.tipo === tipo;
                 const mesmoPeriodo = periodo ? atividade.periodo === periodo : true;
-                const mesmoUsuario = atividade.usuario === currentUser;
+                const mesmoUsuario = atividade.usuario === currentUser.username;
                 const naoExcluida = !excludeId || atividade.id !== excludeId;
 
                 if (mesmoTipo && mesmoPeriodo && mesmoUsuario && naoExcluida) {
@@ -1022,7 +1120,7 @@ function atualizarTabela() { // Função para atualizar a tabela de exibição d
                 (filtroTipo === "Todos" || atividade.tipo === filtroTipo) &&
                 (filtroPeriodo === "" || atividade.periodo.toLowerCase().includes(filtroPeriodo)) &&
                 pertenceAoGrupo &&
-                atividade.usuario === currentUser;
+                atividade.usuario === currentUser.username;
 
             if (aplicarFiltro) {
                 const row = document.createElement("tr");
@@ -1155,7 +1253,7 @@ async function exportarDados() { // Função para Exportação de dados para ZIP
             const transaction = db.transaction("atividades", "readonly");
             const store = transaction.objectStore("atividades");
             const index = store.index("usuario");
-            const request = index.openCursor(IDBKeyRange.only(currentUser));
+            const request = index.openCursor(IDBKeyRange.only(currentUser.username));
 
             request.onsuccess = (e) => {
                 const cursor = e.target.result;
@@ -1207,7 +1305,7 @@ async function exportarDados() { // Função para Exportação de dados para ZIP
     }
 }
 
-async function importarDados() { // Função para Importação de dados de ZIP
+async function importarDados() {
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = '.zip';
@@ -1229,13 +1327,19 @@ async function importarDados() { // Função para Importação de dados de ZIP
             const linhas = csvContent.split('\n').filter(linha => linha.trim() !== '');
 
             // Verificação de compatibilidade do curso
-            if (linhas.length === 0 || !linhas[0].startsWith('Curso�')) {
+            if (linhas.length === 0) {
+                throw new Error("Arquivo CSV vazio");
+            }
+
+            // Verifica a primeira linha (informação do curso)
+            const primeiraLinha = linhas[0];
+            if (!primeiraLinha.startsWith('Curso')) {
                 throw new Error("Arquivo inválido: Formato não reconhecido");
             }
 
-            const cursoImportado = linhas[0].split('�')[1];
-            if (cursoImportado !== CURSO_DE_GRADUACAO) {
-                throw new Error(`Arquivo incompatível! Este arquivo pertence ao curso: ${cursoImportado}. O sistema atual é configurado para: ${CURSO_DE_GRADUACAO}.`);
+            const partesCurso = primeiraLinha.split('�');
+            if (partesCurso.length < 2 || partesCurso[1] !== CURSO_DE_GRADUACAO) {
+                throw new Error(`Arquivo incompatível! Este arquivo pertence ao curso: ${partesCurso[1]}. O sistema atual é configurado para: ${CURSO_DE_GRADUACAO}.`);
             }
 
             // 2. Mapear comprovantes
@@ -1250,21 +1354,36 @@ async function importarDados() { // Função para Importação de dados de ZIP
                 }
             }
 
-            // 3. Importar atividades (ignorando a primeira linha do curso)
+            // 3. Importar atividades (ignorando a primeira linha do curso e a segunda linha de cabeçalho)
             let importadas = 0;
+            let erros = 0;
+
             for (let i = 2; i < linhas.length; i++) {
                 try {
-                    const campos = linhas[i].split('�');
-                    if (campos.length < 7) continue;
+                    const linha = linhas[i].trim();
+                    if (!linha) continue; // Pula linhas vazias
+
+                    const campos = linha.split('�');
+
+                    // Verifica se é uma linha válida
+                    if (campos.length < 7) {
+                        console.warn(`Linha ${i} ignorada: número de campos insuficiente (${campos.length})`);
+                        erros++;
+                        continue;
+                    }
+
+                    // Converte valores numéricos, tratando possíveis vírgulas como separador decimal
+                    const horasRegistradas = parseFloat(campos[3].replace(',', '.'));
+                    const horasValidadas = parseFloat(campos[4].replace(',', '.'));
 
                     const novaAtividade = {
-                        usuario: currentUser,
-                        nome: campos[1],
-                        tipo: campos[2],
-                        horasRegistradas: parseFloat(campos[3]),
-                        horasValidadas: parseFloat(campos[4]),
-                        periodo: campos[5],
-                        status: campos[6],
+                        usuario: currentUser.username,
+                        nome: campos[1].trim(),
+                        tipo: campos[2].trim(),
+                        horasRegistradas: isNaN(horasRegistradas) ? 0 : horasRegistradas,
+                        horasValidadas: isNaN(horasValidadas) ? 0 : horasValidadas,
+                        periodo: campos[5].trim(),
+                        status: campos[6].trim(),
                         comprovante: comprovantes[campos[0]] || null
                     };
 
@@ -1279,7 +1398,8 @@ async function importarDados() { // Função para Importação de dados de ZIP
 
                     importadas++;
                 } catch (error) {
-                    console.error(`Erro na linha ${i}:`, error);
+                    console.error(`Erro na linha ${i}:`, error, linhas[i]);
+                    erros++;
                 }
             }
 
@@ -1287,12 +1407,17 @@ async function importarDados() { // Função para Importação de dados de ZIP
             recalcularHorasGlobal();
             atualizarTabela();
             atualizarResumo();
-            showSystemMessage(`${importadas} atividades importadas com sucesso!`, "success");
+
+            if (erros > 0) {
+                showSystemMessage(`${importadas} atividades importadas com sucesso! ${erros} erros ocorreram. Verifique o console para detalhes.`, "warning");
+            } else {
+                showSystemMessage(`${importadas} atividades importadas com sucesso!`, "success");
+            }
 
         } catch (error) {
-            // Tratamento especial para erro de compatibilidade
+            console.error("Erro na importação:", error);
             if (error.message.includes("incompatível")) {
-                showSystemMessage(error.message, "error", 10000); // Mostra por 10 segundos
+                showSystemMessage(error.message, "error", 10000);
             } else {
                 showSystemMessage("Erro na importação: " + error.message, "error");
             }
@@ -1421,7 +1546,7 @@ async function recalcularHorasGrupo(grupo) { // Função para recalcular as hora
                     const atividade = cursor.value;
                     const atividadeGrupo = obterGrupoPorTipo(atividade.tipo);
 
-                    if (atividadeGrupo === grupo && atividade.usuario === currentUser) {
+                    if (atividadeGrupo === grupo && atividade.usuario === currentUser.username) {
                         atividadesDoGrupo.push(atividade);
                     }
                     cursor.continue();
@@ -1590,23 +1715,35 @@ async function recalcularHorasGlobal() { // Função auxiliar pra recalcular as 
 async function handleEdicaoSubmit(e) { // Função para Edição de atividades
     e.preventDefault();
 
+    // Obter o botão e configurar estado de carregamento
+    const submitBtn = document.getElementById("submitEdicaoBtn");
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    submitBtn.disabled = true;
+
+    // Coletar dados do formulário
     const id = parseInt(document.getElementById("idEdicao").value);
     const nome = document.getElementById("nomeEdicao").value.trim();
     const tipoNovo = document.getElementById("tipoEdicao").value;
     const horasNovas = parseFloat(document.getElementById("horasEdicao").value);
     const periodoNovo = document.getElementById("periodoEdicao").value.trim();
-
-    // Novo: Obter arquivo de comprovante
     const comprovanteInput = document.getElementById("comprovanteEdicao");
     const comprovanteFile = comprovanteInput.files[0];
 
+    // Validações iniciais
     if (!nome || !tipoNovo || isNaN(horasNovas) || horasNovas < 0 || !periodoNovo) {
         showSystemMessage("Preencha todos os campos obrigatórios", "error");
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
         return;
     }
 
-    if (!validarPeriodo(periodoNovo)) {
-        showSystemMessage("Período inválido. Formato esperado: AAAA.S (ex: 2025.1) com ano entre 2000-2100", "error");
+    if (!validarPeriodo(periodoNovo, currentUser.matricula)) {
+        const anoAtual = new Date().getFullYear();
+        const anoIngresso = parseInt(currentUser.matricula.substring(0, 4), 10);
+        showSystemMessage(`Período inválido. Formato esperado: AAAA.S (ex: 2025.1) com ano entre ${anoIngresso}-${anoAtual}`, "error");
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
         return;
     }
 
@@ -1710,7 +1847,14 @@ async function handleEdicaoSubmit(e) { // Função para Edição de atividades
         atualizarTabela();
         atualizarResumo();
 
+        // Restaurar o botão após sucesso
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+
     } catch (error) {
+        // Restaurar o botão em caso de erro
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
         showSystemMessage("Erro ao atualizar atividade: " + error, "error");
     }
 }
@@ -1734,7 +1878,7 @@ async function atualizarResumo() { // Função para exibir Resumo e estatística
         const cursor = e.target.result;
         if (cursor) {
             const atividade = cursor.value;
-            if (atividade.usuario === currentUser) {
+            if (atividade.usuario === currentUser.username) {
                 totalHorasRegistradas += atividade.horasRegistradas;
                 totalHorasValidadas += atividade.horasValidadas;
             }
@@ -1782,7 +1926,7 @@ async function atualizarGraficoResumo() { // Função auxiliar para atualizar a 
         const cursor = e.target.result;
         if (cursor) {
             const atividade = cursor.value;
-            if (atividade.usuario === currentUser) {
+            if (atividade.usuario === currentUser.username) {
                 for (const grupo in AtividadesPorGrupo) {
                     if (AtividadesPorGrupo[grupo].includes(atividade.tipo)) {
                         horasPorGrupo[grupo] += Number(atividade.horasValidadas || 0);
@@ -1864,8 +2008,9 @@ async function handleImprimir() { // Imprime o arquivo pdf padrão
     btn.disabled = true;
 
     try {
-        const nomeAluno = currentUser;
-        const matricula = await obterMatriculaAluno();
+        // Agora usamos o objeto currentUser (nomeCompleto + matrícula)
+        const nomeAluno = currentUser.nomeCompleto || currentUser.username;
+        const matricula = currentUser.matricula || "-----";
         const atividades = await obterAtividadesParaRelatorio();
 
         const { jsPDF } = window.jspdf;
@@ -1889,7 +2034,7 @@ async function handleImprimir() { // Imprime o arquivo pdf padrão
         doc.text("Universidade Estadual do Maranhão", 105, 10, null, null, 'center');
         doc.text("Centro de Ciências Tecnológicas - CCT", 105, 15, null, null, 'center');
         doc.text("Curso Engenharia de Produção Bacharelado", 105, 20, null, null, 'center');
-        doc.text("Sistema Integrado de Gestão de Atividades Acadêmicas", 105, 30, null, null, 'center');
+        doc.text("Sistema Integrado de Gestão de Atividades Complementares Curriculares - SIGACC", 105, 25, null, null, 'center');
 
         // Informações do aluno
         const yStart = 40;
@@ -2010,7 +2155,6 @@ async function handleImprimir() { // Imprime o arquivo pdf padrão
         doc.setTextColor(100, 100, 100);
         doc.text("Centro de Ciências Tecnológicas - CCT/UEMA, Cidade Universitária Paulo VI, São Luís - MA", 105, footerY + 5, null, null, 'center');
         doc.text("Contato: diego.dbr811@gmail.com | Instagram: @eaidih", 105, footerY + 10, null, null, 'center');
-        doc.text("SIGUEMA Acadêmico - Sistema Integrado de Gestão de Atividades Acadêmicas", 105, footerY + 15, null, null, 'center');
 
         // Salvar PDF
         doc.save(`Relatorio_Atividades_Complementares_${nomeAluno.replace(/\s+/g, '_')}.pdf`);
@@ -2024,24 +2168,6 @@ async function handleImprimir() { // Imprime o arquivo pdf padrão
     }
 }
 
-async function obterMatriculaAluno() { // Recupera a matricula do aluno, que deve ser a senha, para anexar ao relatório
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction("usuarios", "readonly");
-        const store = transaction.objectStore("usuarios");
-        const request = store.get(currentUser);
-
-        request.onsuccess = () => {
-            if (request.result) {
-                resolve(request.result.password);
-            } else {
-                reject(new Error("Usuário não encontrado"));
-            }
-        };
-
-        request.onerror = () => reject(new Error("Erro ao acessar banco de dados"));
-    });
-}
-
 async function obterAtividadesParaRelatorio() { // Recupera todas as atividades cadastrada no usuário (currentUser)
     return new Promise((resolve, reject) => {
         const atividades = [];
@@ -2049,7 +2175,7 @@ async function obterAtividadesParaRelatorio() { // Recupera todas as atividades 
         const transaction = db.transaction("atividades", "readonly");
         const store = transaction.objectStore("atividades");
         const index = store.index("usuario");
-        const request = index.openCursor(IDBKeyRange.only(currentUser));
+        const request = index.openCursor(IDBKeyRange.only(currentUser.username));
 
         request.onsuccess = function (e) {
             const cursor = e.target.result;
@@ -2227,5 +2353,4 @@ function showSystemMessage(message, type) {
     setTimeout(() => {
         messageContainer.remove();
     }, 5000);
-
 }
