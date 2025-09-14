@@ -1973,7 +1973,7 @@ async function atualizarGraficoResumo() { // Função auxiliar para atualizar a 
             }
             
             // Forçar cor cinza para 'Horas Restantes' (último elemento)
-            if (horasRestante > 0) {
+            if (horasRestantes > 0) {
                 backgroundColors[backgroundColors.length - 1] = '#e9ecef';
             }
             
@@ -2362,5 +2362,6 @@ function showSystemMessage(message, type) {
         messageContainer.remove();
     }, 5000);
 }
+
 
 
