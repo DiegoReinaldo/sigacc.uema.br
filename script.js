@@ -1953,10 +1953,12 @@ async function atualizarGraficoResumo() { // Função auxiliar para atualizar a 
                 }
             }
 
-            // Sempre inclui a fatia "Horas Restantes" (pode ser 0)
-            labels.push('Horas Restantes');
-            data.push(horasRestantes);
-
+            // Sempre inclui a fatia "Horas Restantes"
+            if (horasRestantes > 0) {
+                labels.push('Horas Restantes');
+                data.push(horasRestantes);
+            }
+            
             // Cores base para os grupos; última cor será usada para "Horas Restantes"
             const baseColors = [
                 '#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#858796'
@@ -1969,9 +1971,12 @@ async function atualizarGraficoResumo() { // Função auxiliar para atualizar a 
                     backgroundColors.push('#d1d3e2');
                 }
             }
+            
             // Forçar cor cinza para 'Horas Restantes' (último elemento)
-            backgroundColors[backgroundColors.length - 1] = '#e9ecef';
-
+            if (horasRestante > 0) {
+                backgroundColors[backgroundColors.length - 1] = '#e9ecef';
+            }
+            
             horasChart = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
@@ -2357,4 +2362,5 @@ function showSystemMessage(message, type) {
         messageContainer.remove();
     }, 5000);
 }
+
 
