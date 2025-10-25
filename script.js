@@ -894,6 +894,9 @@ function validarPeriodo(periodo, matricula) {
 async function calcularHorasValidadas(tipo, horas, periodo, comprovante, excludeId = null) { // Função calcularHorasValidadas atualizada
     if (comprovante == null) return 0;
 
+    // Se horas = 0, retorne 0
+    if (horas === 0) return 0;
+
     // 1. Verificação de limite do grupo
     const grupo = obterGrupoPorTipo(tipo);
     if (grupo) {
@@ -916,7 +919,7 @@ async function calcularHorasValidadas(tipo, horas, periodo, comprovante, exclude
         limiteEspecifico = configAtividades[tipo].maxHorasValidadas;
     }
 
-    return Math.min(horas, limiteEspecifico, disponibilidadeGlobal);
+    return Math.min(limiteEspecifico, disponibilidadeGlobal);
 }
 
 async function consultarHorasCadastradasGlobal(tipo, excludeId = null) { // Função para consultar horas cadastradas globalmente (para um tipo)
@@ -1153,10 +1156,26 @@ function atualizarTabela() { // Função para atualizar a tabela de exibição d
                     <td>${atividade.periodo}</td>
                     <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                     <td style="text-align: center; vertical-align: middle;">
-                        <button class="action-btn download" onclick="baixarComprovante(${atividade.id})" ${!atividade.comprovante ? 'disabled' : ''}>
+                        <button class="action-btn download" onclick="visualizarComprovante(${atividade.id})">
                             <i class="fas fa-download"></i>
                         </button>
                     </td>
+                    <!-- Modal para Preview do Comprovante -->
+                    <div id="previewComprovanteOverlay" class="modal-overlay" style="display: none;">
+                        <div class="modal-content-preview">
+                            <div class="modal-header">
+                                <h2>Visualizar Comprovante</h2>
+                                <span class="btn-close" onclick="fecharPreviewComprovante()">×</span>
+                            </div>
+                            <div class="modal-body">
+                                <iframe id="previewComprovanteIframe" width="100%" height="500px"></iframe>
+                            </div>
+                            <div class="modal-footer">
+                                <button class="form-btn secondary" onclick="fecharPreviewComprovante()">Fechar</button>
+                                <button class="form-btn primary" onclick="baixarComprovanteAtual()">Baixar Comprovante</button>
+                            </div>
+                        </div>
+                    </div>
                     <td style="vertical-align: middle;">
                         <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
                             <button class="action-btn edit" onclick="carregarEdicao(${atividade.id})">
@@ -1216,7 +1235,89 @@ document.querySelectorAll(".activities-table th").forEach(th => {
     resizer.addEventListener("mousedown", mouseDownHandler);
 });
 
-async function baixarComprovante(id) { // Função para Baixar comprovante individual
+// Variáveis globais para o preview do comprovante
+let __CURRENT_COMPROVANTE_ID = null;
+let __CURRENT_COMPROVANTE_BLOBURL = null;
+
+/**
+ * Abre o preview do comprovante
+ */
+async function visualizarComprovante(id) {
+    __CURRENT_COMPROVANTE_ID = id;
+
+    try {
+        const atividade = await new Promise((resolve, reject) => {
+            const transaction = db.transaction("atividades", "readonly");
+            const store = transaction.objectStore("atividades");
+            const request = store.get(id);
+
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject("Erro ao buscar atividade");
+        });
+
+        if (atividade && atividade.comprovante) {
+            // Liberar URL anterior se houver
+            if (__CURRENT_COMPROVANTE_BLOBURL) {
+                URL.revokeObjectURL(__CURRENT_COMPROVANTE_BLOBURL);
+            }
+
+            const blob = new Blob([atividade.comprovante], { type: 'application/pdf' });
+            const blobUrl = URL.createObjectURL(blob);
+            __CURRENT_COMPROVANTE_BLOBURL = blobUrl;
+
+            // Configurar o iframe
+            const iframe = document.getElementById('previewComprovanteIframe');
+            iframe.src = blobUrl;
+
+            // Mostrar o modal
+            document.getElementById('previewComprovanteOverlay').style.display = 'flex';
+        } else {
+            showSystemMessage("Nenhum comprovante disponível para esta atividade", "info");
+        }
+    } catch (error) {
+        showSystemMessage("Erro ao carregar comprovante: " + error, "error");
+    }
+}
+
+/**
+ * Fecha o preview do comprovante
+ */
+function fecharPreviewComprovante() {
+    const overlay = document.getElementById('previewComprovanteOverlay');
+    const iframe = document.getElementById('previewComprovanteIframe');
+
+    overlay.style.display = 'none';
+    iframe.src = 'about:blank';
+
+    // Liberar a URL do blob após um delay para garantir que o iframe foi limpo
+    setTimeout(() => {
+        if (__CURRENT_COMPROVANTE_BLOBURL) {
+            URL.revokeObjectURL(__CURRENT_COMPROVANTE_BLOBURL);
+            __CURRENT_COMPROVANTE_BLOBURL = null;
+        }
+    }, 100);
+}
+
+/**
+ * Baixa o comprovante atual do preview
+ */
+function baixarComprovanteAtual() {
+    if (!__CURRENT_COMPROVANTE_ID) {
+        showSystemMessage("Nenhum comprovante selecionado", "error");
+        return;
+    }
+
+    // Fechar o modal primeiro
+    fecharPreviewComprovante();
+
+    // Usar a função original para baixar
+    setTimeout(() => {
+        baixarComprovante(__CURRENT_COMPROVANTE_ID);
+    }, 300);
+}
+
+// Mantenha a função baixarComprovante original para uso interno
+async function baixarComprovante(id) {
     try {
         const atividade = await new Promise((resolve, reject) => {
             const transaction = db.transaction("atividades", "readonly");
@@ -1248,7 +1349,7 @@ async function baixarComprovante(id) { // Função para Baixar comprovante indiv
     }
 }
 
-async function exportarDados() { // Função para Exportação de dados para ZIP
+async function exportarDados() {
     try {
         const atividades = await new Promise((resolve) => {
             const atividadesDoUsuario = [];
@@ -1271,9 +1372,11 @@ async function exportarDados() { // Função para Exportação de dados para ZIP
 
         const zip = new JSZip();
 
-        // 1. Criar arquivo CSV com proteção de curso
+        // 1. Criar arquivo CSV com proteção de curso e dados do usuário
         let csvContent = `Curso�${CURSO_DE_GRADUACAO}\n`; // Linha de proteção
-        csvContent += "ID�Nome�Tipo�Horas Registradas�Horas Validadas�Período�Status�\n";
+        // Adicionar linha com dados do usuário
+        csvContent += `Dados do usuário�${currentUser.nomeCompleto}�${currentUser.username}�${currentUser.matricula}�${currentUser.password}\n`;
+        csvContent += "ID�Nome�Tipo�Horas Registradas�Horas Validadas�Período�Status\n";
         atividades.forEach(atividade => {
             csvContent += `${atividade.id}�${atividade.nome}�${atividade.tipo}�${atividade.horasRegistradas}�${atividade.horasValidadas}�${atividade.periodo}�${atividade.status}\n`;
         });
@@ -1292,7 +1395,7 @@ async function exportarDados() { // Função para Exportação de dados para ZIP
         const url = URL.createObjectURL(content);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `atividades_${currentUser}_${new Date().toISOString().slice(0, 10)}.zip`;
+        a.download = `atividades_${currentUser.username}_${new Date().toISOString().slice(0, 10)}.zip`;
         document.body.appendChild(a);
         a.click();
 
@@ -1357,11 +1460,11 @@ async function importarDados() {
                 }
             }
 
-            // 3. Importar atividades (ignorando a primeira linha do curso e a segunda linha de cabeçalho)
+            // 3. Importar atividades (ignorando as três primeiras linhas: curso, dados do usuário e cabeçalho)
             let importadas = 0;
             let erros = 0;
 
-            for (let i = 2; i < linhas.length; i++) {
+            for (let i = 3; i < linhas.length; i++) {
                 try {
                     const linha = linhas[i].trim();
                     if (!linha) continue; // Pula linhas vazias
@@ -1377,17 +1480,33 @@ async function importarDados() {
 
                     // Converte valores numéricos, tratando possíveis vírgulas como separador decimal
                     const horasRegistradas = parseFloat(campos[3].replace(',', '.'));
-                    const horasValidadas = parseFloat(campos[4].replace(',', '.'));
+                    const periodo = campos[5].trim();
+                    const comprovante = comprovantes[campos[0]] || null;
+
+                    // Calcular horas validadas e status (em vez de usar os valores importados)
+                    let horasValidadas = 0;
+                    let status = 'Pendente';
+
+                    if (comprovante) {
+                        // Se há comprovante, calcular horas validadas
+                        horasValidadas = await calcularHorasValidadas(
+                            campos[2].trim(),
+                            horasRegistradas,
+                            periodo,
+                            comprovante
+                        );
+                        status = horasValidadas > 0 ? 'Aprovado' : 'Rejeitado';
+                    }
 
                     const novaAtividade = {
                         usuario: currentUser.username,
                         nome: campos[1].trim(),
                         tipo: campos[2].trim(),
                         horasRegistradas: isNaN(horasRegistradas) ? 0 : horasRegistradas,
-                        horasValidadas: isNaN(horasValidadas) ? 0 : horasValidadas,
-                        periodo: campos[5].trim(),
-                        status: campos[6].trim(),
-                        comprovante: comprovantes[campos[0]] || null
+                        horasValidadas: horasValidadas,
+                        periodo: periodo,
+                        status: status,
+                        comprovante: comprovante
                     };
 
                     await new Promise((resolve, reject) => {
@@ -1406,10 +1525,8 @@ async function importarDados() {
                 }
             }
 
-            // 4. Atualizar UI
-            recalcularHorasGlobal();
-            atualizarTabela();
-            atualizarResumo();
+            // 4. Recalcular horas globais para garantir consistência
+            await recalcularHorasGlobal();
 
             if (erros > 0) {
                 showSystemMessage(`${importadas} atividades importadas com sucesso! ${erros} erros ocorreram. Verifique o console para detalhes.`, "warning");
@@ -1601,12 +1718,14 @@ async function recalcularHorasGrupo(grupo) { // Função para recalcular as hora
                     disponivelEspecifico = configTipo.maxHorasValidadas;
                 }
 
-                const novasHorasValidadas = Math.min(
-                    atividade.horasRegistradas,
-                    disponivelGrupo,
-                    disponivelGlobalTipo,
-                    disponivelEspecifico
-                );
+                let novasHorasValidadas = 0;
+                if (atividade.horasRegistradas > 0) {
+                    novasHorasValidadas = Math.min(
+                        disponivelGrupo,
+                        disponivelGlobalTipo,
+                        disponivelEspecifico
+                    );
+                }
 
                 acumuladoGrupo += novasHorasValidadas;
                 if (configTipo.restricao === 'periodo') {
@@ -1958,7 +2077,7 @@ async function atualizarGraficoResumo() { // Função auxiliar para atualizar a 
                 labels.push('Horas Restantes');
                 data.push(horasRestantes);
             }
-            
+
             // Cores base para os grupos; última cor será usada para "Horas Restantes"
             const baseColors = [
                 '#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#858796'
@@ -1971,12 +2090,12 @@ async function atualizarGraficoResumo() { // Função auxiliar para atualizar a 
                     backgroundColors.push('#d1d3e2');
                 }
             }
-            
+
             // Forçar cor cinza para 'Horas Restantes' (último elemento)
             if (horasRestantes > 0) {
                 backgroundColors[backgroundColors.length - 1] = '#e9ecef';
             }
-            
+
             horasChart = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
@@ -2008,202 +2127,1165 @@ async function atualizarGraficoResumo() { // Função auxiliar para atualizar a 
     };
 }
 
-// Funções para Geração de relatório em PDF
-async function handleImprimir() { // Imprime o arquivo pdf padrão
+// Variáveis globais para o preview do PDF
+let __CURRENT_DOC = null;
+let __CURRENT_BLOBURL = null;
+
+/**
+ * Prepara e exibe o preview do relatório ABNT
+ */
+async function previewRelatorioABNT() {
+    // Liberar URL anterior se houver
+    if (__CURRENT_BLOBURL) {
+        URL.revokeObjectURL(__CURRENT_BLOBURL);
+        __CURRENT_BLOBURL = null;
+    }
+
     const btn = document.getElementById("imprimirBtn");
-    const originalText = btn.innerHTML;
+    const originalText = '<i class="fas fa-print"></i> Visualizar PDF';
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando PDF...';
     btn.disabled = true;
 
     try {
-        // Agora usamos o objeto currentUser (nomeCompleto + matrícula)
-        const nomeAluno = currentUser.nomeCompleto || currentUser.username;
-        const matricula = currentUser.matricula || "-----";
-        const atividades = await obterAtividadesParaRelatorio();
+        const pdfArrayBuffer = await gerarRelatorioCompleto();
 
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF({
-            orientation: 'portrait',
-            unit: 'mm',
-            format: 'a4'
-        });
+        // VERIFICAR SE O PDF NÃO ESTÁ VAZIO
+        if (!pdfArrayBuffer || pdfArrayBuffer.byteLength < 100) {
+            throw new Error("PDF gerado está vazio ou corrompido");
+        }
 
-        // Configurações de estilo
-        const primaryColor = [13, 27, 71];
-        const secondaryColor = [243, 115, 33];
+        const blob = new Blob([pdfArrayBuffer], { type: 'application/pdf' });
+        const blobUrl = URL.createObjectURL(blob);
+        __CURRENT_BLOBURL = blobUrl;
 
-        // Cabeçalho institucional
-        doc.setFillColor(...primaryColor);
-        doc.rect(0, 0, 210, 30, 'F');
-        doc.setFontSize(16);
-        doc.setTextColor(255, 255, 255);
-        doc.text("UEMA", 20, 20);
-        doc.setFontSize(10);
-        doc.text("Universidade Estadual do Maranhão", 105, 10, null, null, 'center');
-        doc.text("Centro de Ciências Tecnológicas - CCT", 105, 15, null, null, 'center');
-        doc.text("Curso Engenharia de Produção Bacharelado", 105, 20, null, null, 'center');
-        doc.text("Sistema Integrado de Gestão de Atividades Complementares Curriculares - SIGACC", 105, 25, null, null, 'center');
+        // RESTAURAR BOTÃO IMEDIATAMENTE APÓS GERAR O PDF
+        btn.innerHTML = originalText;
+        btn.disabled = false;
 
-        // Informações do aluno
-        const yStart = 40;
-        doc.setFontSize(12);
-        doc.setTextColor(0, 0, 0);
-        doc.text(`Aluno: ${nomeAluno}`, 20, yStart);
-        doc.text(`Matrícula: ${matricula}`, 20, yStart + 7);
-        doc.text(`Data de emissão: ${new Date().toLocaleDateString('pt-BR')}`, 120, yStart + 7);
-
-        // Título do relatório
-        doc.setFontSize(14);
-        doc.setFont("helvetica", "bold");
-        doc.text("RELATÓRIO DE ATIVIDADES COMPLEMENTARES", 105, yStart + 20, null, null, 'center');
-
-        // Texto introdutório
-        doc.setFontSize(11);
-        doc.setFont("helvetica", "normal");
-        const textoIntro = [
-            "Declaro para os devidos fins que o(a) aluno(a) acima identificado(a) realizou as atividades",
-            "complementares relacionadas abaixo durante o curso de Engenharia de Produção, conforme registro",
-            "no sistema de gestão desenvolvido por Diego Bezerra Reinaldo e em atendimento à Resolução CEPE 037/2024."
-        ];
-
-        textoIntro.forEach((linha, i) => {
-            doc.text(linha, 20, yStart + 35 + (i * 6));
-        });
-
-        // Preparar dados da tabela
-        const headers = [["Nome da Atividade", "Tipo", "Horas Registradas", "Horas Validadas", "Período", "Status"]];
-        const data = atividades.map(atividade => [
-            atividade.nome,
-            atividade.tipo,
-            atividade.horasRegistradas.toString(),
-            atividade.horasValidadas.toString(),
-            atividade.periodo,
-            atividade.status
-        ]);
-
-        // Gerar tabela estilizada
-        doc.autoTable({
-            startY: yStart + 60,
-            head: headers,
-            body: data,
-            theme: 'grid',
-            styles: {
-                fontSize: 9,
-                cellPadding: 2,
-                textColor: [0, 0, 0],
-                font: 'helvetica',
-                lineWidth: 0.1
-            },
-            headStyles: {
-                fillColor: primaryColor,
-                textColor: [255, 255, 255],
-                fontStyle: 'bold',
-                halign: 'center',
-                lineWidth: 0.1
-            },
-            bodyStyles: {
-                lineWidth: 0.1
-            },
-            alternateRowStyles: {
-                fillColor: [245, 245, 245]
-            },
-            columnStyles: {
-                0: { cellWidth: 55, halign: 'left' },
-                1: { cellWidth: 45, halign: 'left' },
-                2: { halign: 'center', cellWidth: 20 },
-                3: { halign: 'center', cellWidth: 20 },
-                4: { halign: 'center', cellWidth: 20 },
-                5: { halign: 'center', cellWidth: 20 }
-            },
-            margin: { left: 15, right: 15 }
-        });
-
-        const finalY = doc.autoTable.previous.finalY;
-
-        // Totais
-        const totalHorasRegistradas = atividades.reduce((sum, a) => sum + a.horasRegistradas, 0);
-        const totalHorasValidadas = atividades.reduce((sum, a) => sum + a.horasValidadas, 0);
-        const progresso = (totalHorasValidadas / 225) * 100;
-
-        doc.setFontSize(11);
-        doc.setFont("helvetica", "bold");
-        doc.text("RESUMO DE HORAS", 20, finalY + 15);
-
-        doc.setFont("helvetica", "normal");
-        doc.text(`Total de Horas Registradas: ${totalHorasRegistradas}`, 30, finalY + 25);
-        doc.text(`Total de Horas Validadas: ${totalHorasValidadas}`, 30, finalY + 32);
-        doc.text(`Horas Necessárias: 225`, 30, finalY + 39);
-
-        // Barra de progresso
-        const barWidth = 80;
-        const barHeight = 8;
-        const barX = 130;
-        const barY = finalY + 25;
-
-        // Fundo da barra
-        doc.setFillColor(200, 200, 200);
-        doc.rect(barX, barY, barWidth, barHeight, 'F');
-
-        // Barra de progresso
-        doc.setFillColor(...secondaryColor);
-        doc.rect(barX, barY, barWidth * (progresso / 100), barHeight, 'F');
-
-        // Texto da barra
-        doc.setFontSize(9);
-        doc.text(`Progresso: ${progresso.toFixed(1)}%`, barX, barY - 2);
-        doc.text(`${totalHorasValidadas} / 225 horas`, barX + barWidth + 5, barY + barHeight / 2 + 1);
-
-        // Rodapé institucional
-        doc.setDrawColor(...primaryColor);
-        doc.setLineWidth(0.5);
-        const footerY = 285;
-        doc.line(15, footerY, 195, footerY);
-
-        doc.setFontSize(9);
-        doc.setTextColor(100, 100, 100);
-        doc.text("Centro de Ciências Tecnológicas - CCT/UEMA, Cidade Universitária Paulo VI, São Luís - MA", 105, footerY + 5, null, null, 'center');
-        doc.text("Contato: diego.dbr811@gmail.com | Instagram: @eaidih", 105, footerY + 10, null, null, 'center');
-
-        // Salvar PDF
-        doc.save(`Relatorio_Atividades_Complementares_${nomeAluno.replace(/\s+/g, '_')}.pdf`);
+        const overlay = document.getElementById('previewRelatorioOverlay');
+        const iframe = document.getElementById('previewRelatorioIframe');
+        if (overlay && iframe) {
+            iframe.src = blobUrl;
+            overlay.style.display = "flex";
+        }
 
     } catch (error) {
+        console.error('Erro ao gerar preview:', error);
         showSystemMessage("Erro ao gerar relatório: " + error.message, "error");
-        console.error(error);
-    } finally {
+        // RESTAURAR O BOTÃO EM CASO DE ERRO
         btn.innerHTML = originalText;
         btn.disabled = false;
     }
 }
 
-async function obterAtividadesParaRelatorio() { // Recupera todas as atividades cadastrada no usuário (currentUser)
+/**
+ * Fecha o preview do relatório
+ */
+function fecharPreviewRelatorio() {
+    const overlay = document.getElementById('previewRelatorioOverlay');
+    const iframe = document.getElementById('previewRelatorioIframe');
+
+    if (overlay) {
+        overlay.style.display = 'none';
+    }
+    if (iframe) {
+        iframe.src = 'about:blank';
+    }
+
+    // Garantir que o botão está no estado correto
+    const btn = document.getElementById("imprimirBtn");
+    btn.innerHTML = '<i class="fas fa-print"></i> Visualizar PDF';
+    btn.disabled = false;
+}
+
+/**
+ * Baixa o PDF atual do preview do relatório
+ */
+function baixarPdfAtual() {
+    if (!__CURRENT_BLOBURL) {
+        showSystemMessage("Nenhum relatório gerado para baixar", "error");
+        return;
+    }
+
+    try {
+        const nomeAluno = currentUser.nomeCompleto ?
+            currentUser.nomeCompleto.replace(/\s+/g, '_') :
+            currentUser.username;
+
+        // Abrir a URL em uma nova aba para forçar o download
+        const link = document.createElement('a');
+        link.href = __CURRENT_BLOBURL;
+        link.download = `Relatorio_Atividades_Complementares_${nomeAluno}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+    } catch (error) {
+        console.error('Erro ao baixar PDF:', error);
+        showSystemMessage("Erro ao baixar o relatório", "error");
+    }
+}
+
+// Atualize a função handleImprimir para usar o novo nome
+async function handleImprimir() {
+    // Verificar se já está processando para evitar duplo clique
+    const btn = document.getElementById("imprimirBtn");
+    if (btn.innerHTML.includes('fa-spinner')) {
+        return; // Já está processando, não fazer nada
+    }
+
+    await previewRelatorioABNT();
+}
+
+// ---------- FUNÇÃO AUXILIAR PARA TESTE DE COMPROVANTES ----------
+
+/**
+ * Função para verificar e validar comprovantes
+ */
+async function verificarComprovantes() {
+    const atividades = await getAtividadesPorUsuario(currentUser.username);
+    const comprovantesValidos = [];
+    const comprovantesInvalidos = [];
+
+    for (const atividade of atividades) {
+        if (atividade.comprovante && atividade.comprovante.byteLength > 0) {
+            try {
+                const info = await getPdfInfo(atividade.comprovante);
+                if (info.isValid) {
+                    comprovantesValidos.push({
+                        id: atividade.id,
+                        nome: atividade.nome,
+                        paginas: info.pageCount
+                    });
+                } else {
+                    comprovantesInvalidos.push({
+                        id: atividade.id,
+                        nome: atividade.nome,
+                        erro: info.error
+                    });
+                }
+            } catch (error) {
+                comprovantesInvalidos.push({
+                    id: atividade.id,
+                    nome: atividade.nome,
+                    erro: error.message
+                });
+            }
+        }
+    }
+
+    console.log('Comprovantes válidos:', comprovantesValidos);
+    console.log('Comprovantes inválidos:', comprovantesInvalidos);
+
+    return {
+        validos: comprovantesValidos,
+        invalidos: comprovantesInvalidos
+    };
+}
+
+// ---------- FUNÇÕES PARA MANIPULAÇÃO DE PDFs ----------
+
+/**
+ * Converte ArrayBuffer para PDFDocument do pdf-lib
+ */
+async function arrayBufferToPdfDocument(arrayBuffer) {
+    try {
+        const { PDFDocument } = PDFLib;
+        return await PDFDocument.load(arrayBuffer);
+    } catch (error) {
+        console.error('Erro ao carregar PDF:', error);
+        throw new Error('Falha ao processar o arquivo PDF');
+    }
+}
+
+/**
+ * Cria uma página de identificação para o comprovante no padrão ABNT
+ */
+async function criarPaginaIdentificacaoComprovante(nomeComprovante, periodo) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+
+    // ---------- CONFIGURAÇÕES ABNT ----------
+    const margemTopo = 30;
+    const margemEsquerda = 30;
+    const margemDireita = 20;
+    const margemInferior = 20;
+
+    const larguraPagina = doc.internal.pageSize.getWidth();
+    const alturaPagina = doc.internal.pageSize.getHeight();
+    const larguraUtil = larguraPagina - margemEsquerda - margemDireita;
+
+    // ---------- FUNÇÕES AUXILIARES ----------
+    const EspacamentoEntreLinhas = 0.3528 * 12 * 1.5;
+    const EspacamentoEntreLinhasSimples = 0.3528 * 12 * 1.0;
+
+    // Função para renderizar linha justificada (mantida do código original)
+    function renderLine(wordsArr, xStart, y, maxWidth) {
+        if (wordsArr.length === 0) return;
+        if (wordsArr.length === 1) {
+            doc.text(wordsArr[0], xStart, y, { align: 'left' });
+            return;
+        }
+        const spaceCount = wordsArr.length - 1;
+        const wordsWidth = wordsArr.map(w => doc.getTextWidth(w)).reduce((a, b) => a + b, 0);
+        const totalSpacesWidth = maxWidth - wordsWidth;
+        const spaceWidth = totalSpacesWidth / spaceCount;
+
+        let x = xStart;
+        for (let i = 0; i < wordsArr.length; i++) {
+            doc.text(wordsArr[i], x, y, { align: 'left' });
+            x += doc.getTextWidth(wordsArr[i]) + spaceWidth;
+        }
+    }
+
+    // Função de justificação (mantida do código original)
+    function TextoJustificadoSemEspacamentoPrimeiraLinha(docInstance, text, xStart, yStart, maxWidth, lineHeight, fontName = "times", fontStyle = "normal", fontSize = 12) {
+        docInstance.setFont(fontName, fontStyle);
+        docInstance.setFontSize(fontSize);
+        const words = text.replace(/\s+/g, ' ').trim().split(' ');
+        let lineWords = [];
+        let y = yStart;
+
+        function lineWidth(wordsArr) {
+            if (wordsArr.length === 0) return 0;
+            return wordsArr.map(w => docInstance.getTextWidth(w)).reduce((a, b) => a + b, 0) + (wordsArr.length - 1) * docInstance.getTextWidth(' ');
+        }
+
+        for (let i = 0; i < words.length; i++) {
+            lineWords.push(words[i]);
+            let lw = lineWidth(lineWords);
+            if (lw > maxWidth) {
+                const last = lineWords.pop();
+                renderLine(lineWords, xStart, y, maxWidth);
+                lineWords = [last];
+                y += lineHeight;
+            }
+        }
+        if (lineWords.length > 0) {
+            docInstance.text(lineWords.join(' '), xStart, y, { align: 'left', maxWidth: maxWidth });
+            y += lineHeight;
+        }
+        return y;
+    }
+
+    // ---------- CONTEÚDO DA PÁGINA ----------
+    let cursorY = margemTopo;
+
+    // Título principal
+    doc.setFont("times", "bold");
+    doc.setFontSize(16);
+    doc.text("COMPROVANTE DE ATIVIDADE COMPLEMENTAR", margemEsquerda + (larguraUtil / 2), cursorY, { align: 'center' });
+    cursorY += 3 * EspacamentoEntreLinhas;
+
+    // Atividade com justificação
+    doc.setFont("times", "bold");
+    doc.setFontSize(12);
+    doc.text("Atividade: ", margemEsquerda, cursorY);
+
+    doc.setFont("times", "normal");
+    const textoAtividade = nomeComprovante;
+    cursorY = TextoJustificadoSemEspacamentoPrimeiraLinha(doc, textoAtividade, margemEsquerda, cursorY + EspacamentoEntreLinhas, larguraUtil, EspacamentoEntreLinhas, "times", "normal", 12);
+
+    cursorY += EspacamentoEntreLinhas;
+
+    // Período (se existir)
+    if (periodo && periodo !== 'N/A') {
+        doc.setFont("times", "bold");
+        doc.setFontSize(12);
+        doc.text("Período: ", margemEsquerda, cursorY);
+
+        doc.setFont("times", "normal");
+        doc.text(periodo, margemEsquerda + doc.getTextWidth("Período:_"), cursorY);
+        cursorY += 2 * EspacamentoEntreLinhas;
+    } else {
+        cursorY += EspacamentoEntreLinhas;
+    }
+
+    // Texto informativo
+    doc.setFont("times", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(128, 128, 128); // Cinza
+    cursorY = TextoJustificadoSemEspacamentoPrimeiraLinha(doc, "Documento comprobatório anexado digitalmente.", margemEsquerda, cursorY, larguraUtil, EspacamentoEntreLinhas, "times", "normal", 10);
+
+    cursorY += 2 * EspacamentoEntreLinhas;
+
+    // Linha divisória
+    doc.setDrawColor(200, 200, 200); // Cinza claro
+    doc.setLineWidth(0.5);
+    doc.line(margemEsquerda, cursorY, margemEsquerda + larguraUtil, cursorY);
+
+    cursorY += EspacamentoEntreLinhas;
+
+    // Texto de início do comprovante
+    doc.setFont("times", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100); // Cinza escuro
+    doc.text("INÍCIO DO COMPROVANTE ORIGINAL", margemEsquerda + (larguraUtil / 2), cursorY, { align: 'center' });
+
+    // Rodapé
+    const rodapeY = alturaPagina - margemInferior;
+    doc.setFont("times", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(180, 180, 180); // Cinza claro
+    doc.text("Relatório gerado automaticamente pelo SIGACC - Sistema Integrado de Gestão de Atividades Complementares Curriculares",
+        margemEsquerda + (larguraUtil / 2), rodapeY, { align: 'center' });
+
+    // Retornar como ArrayBuffer para combinação
+    return doc.output('arraybuffer');
+}
+
+/**
+ * Função auxiliar para combinar PDFs
+ */
+async function combinarPDFs(pdfs) {
+    const { PDFDocument } = PDFLib;
+    const mergedPdf = await PDFDocument.create();
+
+    for (const pdf of pdfs) {
+        try {
+            let pdfDoc;
+            if (pdf instanceof ArrayBuffer || pdf instanceof Uint8Array) {
+                pdfDoc = await PDFDocument.load(pdf);
+            } else {
+                console.warn('Tipo de PDF não suportado:', typeof pdf);
+                continue;
+            }
+
+            const pages = await mergedPdf.copyPages(pdfDoc, pdfDoc.getPageIndices());
+            pages.forEach(page => mergedPdf.addPage(page));
+
+        } catch (error) {
+            console.error('Erro ao combinar PDF:', error);
+            const fallbackPdf = await criarPaginaIdentificacaoComprovante(
+                'Comprovante com erro de processamento',
+                'N/A'
+            );
+            const fallbackDoc = await PDFDocument.load(fallbackPdf);
+            const fallbackPages = await mergedPdf.copyPages(fallbackDoc, fallbackDoc.getPageIndices());
+            fallbackPages.forEach(page => mergedPdf.addPage(page));
+        }
+    }
+
+    return await mergedPdf.save();
+}
+
+/**
+ * Obtém informações básicas do PDF (número de páginas)
+ */
+async function getPdfInfo(arrayBuffer) {
+    try {
+        const { PDFDocument } = PDFLib;
+        const pdfDoc = await PDFDocument.load(arrayBuffer);
+        return {
+            pageCount: pdfDoc.getPageCount(),
+            isValid: true
+        };
+    } catch (error) {
+        return {
+            pageCount: 0,
+            isValid: false,
+            error: error.message
+        };
+    }
+}
+
+/**
+ * Função principal que combina relatório + comprovantes
+ */
+async function gerarRelatorioCompleto() {
+    try {
+        // 1. Gerar o relatório textual (ABNT) com numeração
+        const relatorioArrayBuffer = await criarRelatorioCompletoABNT();
+
+        // 2. Obter atividades para processar comprovantes
+        const atividades = await getAtividadesPorUsuario(currentUser.username);
+        const atividadesAprovadas = atividades.filter(a => a.status === 'Aprovado');
+
+        // 3. Coletar comprovantes das atividades aprovadas
+        const comprovantes = [];
+        atividadesAprovadas.forEach(atividade => {
+            if (atividade.comprovante) {
+                comprovantes.push({
+                    id: atividade.id,
+                    nome: atividade.nome,
+                    comprovante: atividade.comprovante
+                });
+            }
+        });
+
+        // 4. Preparar comprovantes (sem numeração)
+        const comprovantesProcessados = [];
+
+        for (const comprovante of comprovantes) {
+            try {
+                if (comprovante.comprovante && comprovante.comprovante.byteLength > 0) {
+                    // Encontrar a atividade correspondente para obter período
+                    const atividade = atividadesAprovadas.find(a => a.id === comprovante.id);
+
+                    // Criar página de identificação (sem numeração) - já retorna ArrayBuffer
+                    const paginaIdArrayBuffer = await criarPaginaIdentificacaoComprovante(
+                        comprovante.nome,
+                        atividade ? atividade.periodo : 'N/A'
+                    );
+
+                    // Adicionar página de identificação + comprovante real
+                    comprovantesProcessados.push(paginaIdArrayBuffer); // Já é ArrayBuffer
+                    comprovantesProcessados.push(comprovante.comprovante);
+                }
+            } catch (error) {
+                console.error(`Erro ao processar comprovante ${comprovante.id}:`, error);
+
+                // Fallback em caso de erro - também retorna ArrayBuffer
+                const fallbackArrayBuffer = await criarPaginaIdentificacaoComprovante(
+                    comprovante.nome,
+                    'Erro no processamento do comprovante'
+                );
+                comprovantesProcessados.push(fallbackArrayBuffer); // Já é ArrayBuffer
+            }
+        }
+
+        // 5. Combinar relatório (com numeração) + comprovantes (sem numeração)
+        const todosPdfs = [relatorioArrayBuffer, ...comprovantesProcessados];
+        const pdfCombinado = await combinarPDFs(todosPdfs);
+
+        return pdfCombinado;
+
+    } catch (error) {
+        console.error('Erro ao gerar relatório completo:', error);
+        throw new Error('Falha ao gerar relatório completo');
+    }
+}
+
+/**
+ * Combina múltiplos PDFs em um único PDF
+ */
+async function combinarPDFs(pdfs) {
+    const { PDFDocument } = PDFLib;
+    const mergedPdf = await PDFDocument.create();
+
+    for (const pdf of pdfs) {
+        try {
+            // Se for um ArrayBuffer, carrega como PDF
+            let pdfDoc;
+            if (pdf instanceof ArrayBuffer || pdf instanceof Uint8Array) {
+                pdfDoc = await PDFDocument.load(pdf);
+            } else {
+                console.warn('Tipo de PDF não suportado:', typeof pdf);
+                continue;
+            }
+
+            // Copia todas as páginas
+            const pages = await mergedPdf.copyPages(pdfDoc, pdfDoc.getPageIndices());
+            pages.forEach(page => mergedPdf.addPage(page));
+
+        } catch (error) {
+            console.error('Erro ao combinar PDF:', error);
+            // Em caso de erro, cria uma página de fallback
+            const fallbackArrayBuffer = await criarPaginaIdentificacaoComprovante(
+                'Comprovante com erro de processamento',
+                'N/A'
+            );
+            const fallbackDoc = await PDFDocument.load(fallbackArrayBuffer);
+            const fallbackPages = await mergedPdf.copyPages(fallbackDoc, fallbackDoc.getPageIndices());
+            fallbackPages.forEach(page => mergedPdf.addPage(page));
+        }
+    }
+
+    return await mergedPdf.save();
+}
+
+// ---------- FUNÇÃO PRINCIPAL DO RELATÓRIO ABNT ----------
+
+/**
+ * Cria o relatório completo no formato ABNT com numeração apenas na parte textual
+ */
+async function criarRelatorioCompletoABNT() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+
+    // Obter dados do estudante e atividades
+    const estudante = currentUser;
+    const atividades = await getAtividadesPorUsuario(currentUser.username);
+    const atividadesAprovadas = atividades.filter(a => a.status === 'Aprovado');
+
+    // Agrupar atividades aprovadas por grupo
+    const atividadesPorGrupo = {};
+    gruposAtividades.forEach(grupo => {
+        atividadesPorGrupo[grupo] = atividadesAprovadas.filter(atividade => {
+            for (const grupoKey in AtividadesPorGrupo) {
+                if (AtividadesPorGrupo[grupoKey].includes(atividade.tipo)) {
+                    return grupoKey === grupo;
+                }
+            }
+            return false;
+        });
+    });
+
+    // ---------- CONFIGURAÇÕES ----------
+    const instituicao = "UNIVERSIDADE ESTADUAL DO MARANHÃO";
+    const centro = "CENTRO DE CIÊNCIAS TECNOLÓGICAS";
+    const curso = "CURSO DE GRADUAÇÃO EM ENGENHARIA DE PRODUÇÃO";
+    const nomeAluno = estudante.nomeCompleto || estudante.username;
+    const matriculaAluno = estudante.matricula || "-----";
+    const tituloRelatorio = "Relatório de Atividades Complementares";
+
+    const descricaoAprovacao = "Relatório de Atividades Complementares apresentado na Universidade Estadual do Maranhão, em cumprimento às exigências da disciplina de Atividades Complementares, do Curso Bacharelado em Engenharia de Produção, com o objetivo de comprovar o cumprimento da carga horária determinada de 225h.";
+
+    const introducao_p1 = "De acordo com o disposto no Regulamento das Atividades Complementares do Curso de Engenharia de Produção da Universidade Estadual do Maranhão – 3ª atualização, é obrigatório ao discente do curso o cumprimento de 225 (duzentas e vinte e cinco) horas de Atividades Complementares (ACs). Este requisito, essencial para a obtenção do grau de Bacharel em Engenharia de Produção, está em consonância com as Resoluções CNE No. 02, de 24 de abril de 2019, e CONSUN/UEMA No. 1.369/2019, de 21 de março de 2019.";
+
+    const introducao_p2 = "Conforme estabelecido no Art. 1º do referido regulamento, as Atividades Complementares visam proporcionar flexibilização curricular e o desenvolvimento da autonomia do discente, incentivando sua participação em atividades de caráter científico, acadêmico, cultural ou social que contribuam para o enriquecimento de sua formação profissional.";
+
+    const introducao_p3 = "Para a integralização desta carga horária, o Art. 5º determina que as 225 horas devem ser distribuídas em, no mínimo, 3 (três) dos 6 (seis) grupos de atividades descritos no Anexo A do regulamento, respeitando os limites máximos de pontuação por atividade e por grupo.";
+
+    const objetivo_p1 = "Com o intuito de cumprir este requisito obrigatório para a graduação, o presente relatório tem como objetivo detalhar e comprovar as atividades realizadas pelo discente " + nomeAluno + " ao longo de sua trajetória acadêmica.";
+
+    const objetivo_p2 = "Em atendimento ao Art. 1º, § 2º, este documento serve como base para o requerimento de avaliação das atividades perante a Diretoria do Curso, apresentando de forma organizada:";
+
+    const objetivo_itemA = "a) A relação das atividades realizadas, enquadradas nos grupos previstos no Anexo A.";
+    const objetivo_itemB = "b) A carga horária pleiteada para cada atividade.";
+    const objetivo_itemC = "c) Os documentos comprobatórios que atestam a realização das mesmas (em anexo).";
+
+    const metodologia_p1 = "As atividades desenvolvidas pelo discente foram catalogadas e classificadas conforme os grupos estabelecidos no Anexo A do regulamento. A seguir, é apresentada uma tabela-resumo que consolida todas as atividades realizadas, permitindo uma visão clara do atendimento aos critérios de distribuição e carga horária total.";
+
+    const metodologia_p2 = "O discente buscou cumprir a exigência de, no mínimo, três grupos distintos, assegurando uma formação complementar diversificada, tal como preconizam os objetivos das ACs.";
+
+    const orientador = "Prof. Dr. Wellinton de Assunção";
+    const cargoOrientador = "Docente da Disciplina de Atividades Complementares";
+    const cidadeUF = "São Luís, MA";
+    const ano = new Date().getFullYear().toString();
+
+    // ---------- MARGENS ABNT ----------
+    const margemTopo = 30;
+    const margemEsquerda = 30;
+    const margemDireita = 20;
+    const margemInferior = 20;
+
+    const larguraPagina = doc.internal.pageSize.getWidth();
+    const alturaPagina = doc.internal.pageSize.getHeight();
+    const larguraUtil = larguraPagina - margemEsquerda - margemDireita;
+    const alturaUtil = alturaPagina - margemTopo - margemInferior;
+
+    // ---------- FUNÇÕES AUXILIARES ----------
+    const EspacamentoEntreLinhas = 0.3528 * 12 * 1.5;
+    const EspacamentoEntreLinhasSimples = 0.3528 * 12 * 1.0;
+    const pts_em_mm = 0.3528;
+
+    // Array para armazenar as páginas do sumário
+    const paginasSumario = {
+        introducao: 0,
+        objetivo: 0,
+        metodologia: 0,
+        tabelaResumo: 0,
+        consideracoesFinais: 0,
+        anexos: 0
+    };
+
+    // Função para adicionar número da página (apenas a partir da introdução)
+    function adicionarNumeroPagina(doc, numero) {
+        const pageHeight = doc.internal.pageSize.getHeight();
+        doc.setFont("times", "normal");
+        doc.setFontSize(12);
+        doc.text(numero.toString(), margemEsquerda + (larguraUtil / 2), pageHeight - margemInferior + 10, { align: 'center' });
+    }
+
+    // Funções de justificação (mantidas do código original)
+    function renderLine(wordsArr, xStart, y, maxWidth) {
+        if (wordsArr.length === 0) return;
+        if (wordsArr.length === 1) {
+            doc.text(wordsArr[0], xStart, y, { align: 'left' });
+            return;
+        }
+        const spaceCount = wordsArr.length - 1;
+        const wordsWidth = wordsArr.map(w => doc.getTextWidth(w)).reduce((a, b) => a + b, 0);
+        const totalSpacesWidth = maxWidth - wordsWidth;
+        const spaceWidth = totalSpacesWidth / spaceCount;
+
+        let x = xStart;
+        for (let i = 0; i < wordsArr.length; i++) {
+            doc.text(wordsArr[i], x, y, { align: 'left' });
+            x += doc.getTextWidth(wordsArr[i]) + spaceWidth;
+        }
+    }
+
+    function TextoJustificadoComEspacamentoPrimeiraLinha(docInstance, text, xStart, yStart, maxWidth, espacamentoInstitucional, recuoPrimeiraLinha, fontName = "times", fontStyle = "normal", fontSize = 12) {
+        docInstance.setFont(fontName, fontStyle);
+        docInstance.setFontSize(fontSize);
+
+        const words = text.replace(/\s+/g, ' ').trim().split(' ');
+        let lineWords = [];
+        let y = yStart;
+
+        function lineWidth(wordsArr) {
+            if (wordsArr.length === 0) return 0;
+            return (
+                wordsArr.map(w => docInstance.getTextWidth(w)).reduce((a, b) => a + b, 0) +
+                (wordsArr.length - 1) * docInstance.getTextWidth(' ')
+            );
+        }
+
+        let primeiraLinhaParagrafo = true;
+
+        for (let i = 0; i < words.length; i++) {
+            lineWords.push(words[i]);
+
+            const larguraDisponivel = primeiraLinhaParagrafo ? maxWidth - recuoPrimeiraLinha : maxWidth;
+
+            let lw = lineWidth(lineWords);
+
+            if (lw > larguraDisponivel) {
+                const last = lineWords.pop();
+
+                const currentX = primeiraLinhaParagrafo ? xStart + recuoPrimeiraLinha : xStart;
+
+                if (lineWords.length > 1) {
+                    const totalTextWidth = lineWidth(lineWords);
+                    const spaceWidth = docInstance.getTextWidth(' ');
+                    const extraSpace = (larguraDisponivel - totalTextWidth) / (lineWords.length - 1);
+
+                    let cursorX = currentX;
+                    for (let j = 0; j < lineWords.length; j++) {
+                        docInstance.text(lineWords[j], cursorX, y);
+                        cursorX += docInstance.getTextWidth(lineWords[j]) + spaceWidth + extraSpace;
+                    }
+                } else {
+                    docInstance.text(lineWords.join(' '), currentX, y);
+                }
+
+                lineWords = [last];
+                y += espacamentoInstitucional;
+                primeiraLinhaParagrafo = false;
+            }
+        }
+
+        if (lineWords.length > 0) {
+            const currentX = primeiraLinhaParagrafo ? xStart + recuoPrimeiraLinha : xStart;
+            docInstance.text(lineWords.join(' '), currentX, y);
+            y += espacamentoInstitucional;
+        }
+
+        return y;
+    }
+
+    function TextoJustificadoSemEspacamentoPrimeiraLinha(docInstance, text, xStart, yStart, maxWidth, lineHeight, fontName = "times", fontStyle = "normal", fontSize = 12) {
+        docInstance.setFont(fontName, fontStyle);
+        docInstance.setFontSize(fontSize);
+        const words = text.replace(/\s+/g, ' ').trim().split(' ');
+        let lineWords = [];
+        let y = yStart;
+
+        function lineWidth(wordsArr) {
+            if (wordsArr.length === 0) return 0;
+            return wordsArr.map(w => docInstance.getTextWidth(w)).reduce((a, b) => a + b, 0) + (wordsArr.length - 1) * docInstance.getTextWidth(' ');
+        }
+
+        for (let i = 0; i < words.length; i++) {
+            lineWords.push(words[i]);
+            let lw = lineWidth(lineWords);
+            if (lw > maxWidth) {
+                const last = lineWords.pop();
+                renderLine(lineWords, xStart, y, maxWidth);
+                lineWords = [last];
+                y += lineHeight;
+            }
+        }
+        if (lineWords.length > 0) {
+            docInstance.text(lineWords.join(' '), xStart, y, { align: 'left', maxWidth: maxWidth });
+            y += lineHeight;
+        }
+        return y;
+    }
+
+    // ---------- CAPA ----------
+    doc.setFont("times", "normal");
+    const capaLinhas = [
+        instituicao.toUpperCase(),
+        centro.toUpperCase(),
+        curso.toUpperCase()
+    ];
+
+    doc.setFontSize(12);
+    let y = margemTopo + EspacamentoEntreLinhasSimples;
+    capaLinhas.forEach(line => {
+        doc.text(line, margemEsquerda + (larguraUtil / 2), y, { align: 'center' });
+        y += EspacamentoEntreLinhas;
+    });
+
+    y += 4 * EspacamentoEntreLinhas;
+    doc.setFontSize(12);
+    doc.setFont("times", "normal");
+    doc.text(nomeAluno.toUpperCase(), margemEsquerda + (larguraUtil / 2), y, { align: 'center' });
+
+    y += 5 * EspacamentoEntreLinhas;
+    doc.setFont("times", "bold");
+    doc.setFontSize(12);
+    doc.text(tituloRelatorio.toUpperCase(), margemEsquerda + (larguraUtil / 2), y, { align: 'center' });
+
+    doc.setFont("times", "normal");
+    doc.setFontSize(12);
+    doc.text(cidadeUF, margemEsquerda + (larguraUtil / 2), alturaPagina - margemInferior - EspacamentoEntreLinhas, { align: 'center' });
+    doc.text(ano, margemEsquerda + (larguraUtil / 2), alturaPagina - margemInferior, { align: 'center' });
+
+    // ---------- FOLHA DE APROVAÇÃO ----------
+    doc.addPage();
+    doc.setPage(doc.internal.getNumberOfPages());
+    let cursorY = margemTopo + EspacamentoEntreLinhasSimples;
+    doc.setFont("times", "bold");
+    doc.setFontSize(12);
+    doc.text(nomeAluno.toUpperCase(), margemEsquerda + (larguraUtil / 2), cursorY, { align: 'center' });
+
+    cursorY += 5 * EspacamentoEntreLinhas;
+    doc.setFont("times", "normal");
+    doc.setFontSize(12);
+    doc.text(tituloRelatorio.toUpperCase(), margemEsquerda + (larguraUtil / 2), cursorY, { align: 'center' });
+
+    cursorY += 3 * EspacamentoEntreLinhas;
+    doc.setFont("times", "normal");
+    doc.setFontSize(12);
+    const yAposParagrafo = TextoJustificadoSemEspacamentoPrimeiraLinha(doc, descricaoAprovacao, margemEsquerda + 60, cursorY, 100, EspacamentoEntreLinhasSimples, "times", "normal", 12);
+
+    let approvalY = yAposParagrafo + 3 * EspacamentoEntreLinhas;
+    doc.setFontSize(12);
+    doc.text("Aprovado em _______ de _______________ de " + ano, margemEsquerda + 60, approvalY, { align: 'left' });
+
+    let assinaturaY = approvalY + 6 * EspacamentoEntreLinhas;
+    const assinaturaX = margemEsquerda;
+    const assinaturaWidth = larguraUtil;
+    doc.setLineWidth(0.3);
+    doc.line(assinaturaX, assinaturaY, assinaturaX + assinaturaWidth, assinaturaY);
+    doc.setFont("times", "bold");
+    doc.setFontSize(12);
+    doc.text(nomeAluno, margemEsquerda + (larguraUtil / 2), assinaturaY + EspacamentoEntreLinhasSimples, { align: 'center' });
+    doc.setFont("times", "normal");
+    doc.setFontSize(12);
+    doc.text("Discente do Curso de Engenharia de Produção", margemEsquerda + (larguraUtil / 2), assinaturaY + 2 * EspacamentoEntreLinhasSimples, { align: 'center' });
+    doc.text("Universidade Estadual do Maranhão", margemEsquerda + (larguraUtil / 2), assinaturaY + 3 * EspacamentoEntreLinhasSimples, { align: 'center' });
+
+    assinaturaY += 6 * EspacamentoEntreLinhas;
+    doc.setLineWidth(0.3);
+    doc.line(assinaturaX, assinaturaY, assinaturaX + assinaturaWidth, assinaturaY);
+    doc.setFont("times", "bold");
+    doc.setFontSize(12);
+    doc.text(orientador, margemEsquerda + (larguraUtil / 2), assinaturaY + EspacamentoEntreLinhasSimples, { align: 'center' });
+    doc.setFont("times", "normal");
+    doc.setFontSize(12);
+    doc.text(cargoOrientador, margemEsquerda + (larguraUtil / 2), assinaturaY + 2 * EspacamentoEntreLinhasSimples, { align: 'center' });
+    doc.text("Universidade Estadual do Maranhão", margemEsquerda + (larguraUtil / 2), assinaturaY + 3 * EspacamentoEntreLinhasSimples, { align: 'center' });
+
+    doc.setFont("times", "normal");
+    doc.setFontSize(12);
+    doc.text(cidadeUF, margemEsquerda + (larguraUtil / 2), alturaPagina - margemInferior - EspacamentoEntreLinhas, { align: 'center' });
+    doc.text(ano, margemEsquerda + (larguraUtil / 2), alturaPagina - margemInferior, { align: 'center' });
+
+    // ---------- SUMÁRIO ----------
+    doc.addPage();
+    const paginaSumario = doc.internal.getNumberOfPages();
+    doc.setPage(doc.internal.getNumberOfPages());
+
+    doc.setFont("times", "bold");
+    doc.setFontSize(12);
+    doc.text("SUMÁRIO", margemEsquerda + (larguraUtil / 2), margemTopo + EspacamentoEntreLinhasSimples, { align: 'center' });
+
+    let sumarioY = margemTopo + 4 * EspacamentoEntreLinhasSimples;
+    doc.setFont("times", "normal");
+    doc.setFontSize(12);
+
+    // Função para desenhar linha do sumário com numeração dinâmica
+    function desenharLinhaSumario(titulo, numeroPagina, y) {
+        const larguraTotal = larguraUtil;
+        const larguraTitulo = doc.getTextWidth(titulo);
+        const numeroStr = numeroPagina.toString();
+        const larguraNumero = doc.getTextWidth(numeroStr);
+
+        const espacoPontos = larguraTotal - larguraTitulo - larguraNumero - 5;
+        const numPontos = Math.floor(espacoPontos / doc.getTextWidth('.'));
+        const pontos = '.'.repeat(numPontos);
+
+        doc.text(titulo, margemEsquerda, y);
+        doc.text(pontos, margemEsquerda + larguraTitulo + 2, y);
+        doc.text(numeroStr, margemEsquerda + larguraTotal - larguraNumero, y);
+
+        return y + EspacamentoEntreLinhas;
+    }
+
+    // As páginas serão atualizadas depois que o conteúdo for gerado
+    const itensSumario = [
+        { titulo: "1.  INTRODUÇÃO", pagina: 0 },
+        { titulo: "2.  OBJETIVO DO RELATÓRIO", pagina: 0 },
+        { titulo: "3.  METODOLOGIA E APRESENTAÇÃO DAS ATIVIDADES", pagina: 0 },
+        { titulo: "4.  TABELA-RESUMO DAS ATIVIDADES COMPLEMENTARES", pagina: 0 },
+        { titulo: "5.  CONSIDERAÇÕES FINAIS", pagina: 0 },
+        { titulo: "ANEXOS", pagina: 0 }
+    ];
+
+    itensSumario.forEach(item => {
+        sumarioY = desenharLinhaSumario(item.titulo, item.pagina, sumarioY);
+    });
+
+    // ---------- INTRODUÇÃO E OBJETIVOS ----------
+    doc.addPage();
+    const paginaIntroducao = doc.internal.getNumberOfPages();
+    paginasSumario.introducao = paginaIntroducao;
+    paginasSumario.objetivo = paginaIntroducao;
+    paginasSumario.metodologia = paginaIntroducao;
+    doc.setPage(doc.internal.getNumberOfPages());
+    cursorY = margemTopo + EspacamentoEntreLinhas;
+
+    // Introdução
+    doc.setFont("times", "bold");
+    doc.setFontSize(12);
+    doc.text("1.  INTRODUÇÃO", margemEsquerda + (0.63 * 10), cursorY, { align: 'left' });
+    cursorY += EspacamentoEntreLinhas + (4 * pts_em_mm);
+
+    let yApos_ip1 = TextoJustificadoComEspacamentoPrimeiraLinha(doc, introducao_p1, margemEsquerda, cursorY, larguraUtil, EspacamentoEntreLinhas, 12.5);
+    cursorY = yApos_ip1;
+    let yApos_ip2 = TextoJustificadoComEspacamentoPrimeiraLinha(doc, introducao_p2, margemEsquerda, cursorY, larguraUtil, EspacamentoEntreLinhas, 12.5);
+    cursorY = yApos_ip2;
+    let yApos_ip3 = TextoJustificadoComEspacamentoPrimeiraLinha(doc, introducao_p3, margemEsquerda, cursorY, larguraUtil, EspacamentoEntreLinhas, 12.5);
+    cursorY = yApos_ip3 + (18 * pts_em_mm);
+
+    // Objetivo
+    doc.setFont("times", "bold");
+    doc.setFontSize(12);
+    doc.text("2.  OBJETIVO DO RELATÓRIO", margemEsquerda + (0.63 * 10), cursorY, { align: 'left' });
+    cursorY += EspacamentoEntreLinhas + (4 * pts_em_mm);
+
+    let yApos_op1 = TextoJustificadoComEspacamentoPrimeiraLinha(doc, objetivo_p1, margemEsquerda, cursorY, larguraUtil, EspacamentoEntreLinhas, 12.5);
+    cursorY = yApos_op1;
+    let yApos_op2 = TextoJustificadoComEspacamentoPrimeiraLinha(doc, objetivo_p2, margemEsquerda, cursorY, larguraUtil, EspacamentoEntreLinhas, 12.5);
+    cursorY = yApos_op2;
+    let yApos_oitemA = TextoJustificadoComEspacamentoPrimeiraLinha(doc, objetivo_itemA, margemEsquerda, cursorY, larguraUtil, EspacamentoEntreLinhas, 6.4);
+    cursorY = yApos_oitemA;
+    let yApos_oitemB = TextoJustificadoComEspacamentoPrimeiraLinha(doc, objetivo_itemB, margemEsquerda, cursorY, larguraUtil, EspacamentoEntreLinhas, 6.4);
+    cursorY = yApos_oitemB;
+    let yApos_oitemC = TextoJustificadoComEspacamentoPrimeiraLinha(doc, objetivo_itemC, margemEsquerda, cursorY, larguraUtil, EspacamentoEntreLinhas, 6.4);
+    cursorY = yApos_oitemC + (18 * pts_em_mm);
+
+    // Metodologia
+    doc.setFont("times", "bold");
+    doc.setFontSize(12);
+    doc.text("3.  METODOLOGIA E APRESENTAÇÃO DAS ATIVIDADES", margemEsquerda + (0.63 * 10), cursorY + 0.5, { align: 'left' });
+    cursorY += EspacamentoEntreLinhas + (4 * pts_em_mm);
+
+    let yApos_mp1 = TextoJustificadoComEspacamentoPrimeiraLinha(doc, metodologia_p1, margemEsquerda, cursorY, larguraUtil, EspacamentoEntreLinhas, 12.5);
+    cursorY = yApos_mp1;
+    let yApos_mp2 = TextoJustificadoComEspacamentoPrimeiraLinha(doc, metodologia_p2, margemEsquerda, cursorY, larguraUtil, EspacamentoEntreLinhas, 12.5);
+    cursorY = yApos_mp2;
+
+    // ---------- TABELAS DE ATIVIDADES ----------
+    doc.addPage();
+    const paginaTabelas = doc.internal.getNumberOfPages();
+    paginasSumario.tabelaResumo = paginaTabelas;
+    doc.setPage(doc.internal.getNumberOfPages());
+    cursorY = margemTopo + EspacamentoEntreLinhas;
+
+    const totalHorasValidadas = atividadesAprovadas.reduce((sum, a) => sum + a.horasValidadas, 0);
+    const gruposComAtividades = Object.values(atividadesPorGrupo).filter(grupo => grupo.length > 0).length;
+
+    doc.setFont("times", "bold");
+    doc.setFontSize(12);
+    doc.text("4.  TABELA-RESUMO DAS ATIVIDADES COMPLEMENTARES", margemEsquerda + (0.63 * 10), cursorY, { align: 'left' });
+    cursorY += 2 * EspacamentoEntreLinhas;
+
+    let startYTable = cursorY;
+
+    // Configurações de margem para autoTable
+    const margin = {
+        top: margemTopo,
+        bottom: margemInferior,
+        left: margemDireita,
+        right: margemDireita
+    };
+
+    // Largura fixa para todas as tabelas: 17cm (170mm)
+    const larguraTabelaFixa = 170;
+
+    // Para cada grupo, criar tabela se tiver atividades
+    for (const grupo of gruposAtividades) {
+        const atividadesDoGrupo = atividadesPorGrupo[grupo];
+
+        if (atividadesDoGrupo.length === 0) continue;
+
+        // Verificar se precisa de nova página antes de adicionar a tabela
+        const alturaDisponivel = alturaPagina - startYTable - margemInferior;
+        const alturaMinimaTabela = 30;
+
+        if (alturaDisponivel < alturaMinimaTabela) {
+            doc.addPage();
+            doc.setPage(doc.internal.getNumberOfPages());
+            startYTable = margemTopo;
+        }
+
+        doc.autoTable({
+            startY: startYTable,
+            margin: margin,
+            tableWidth: larguraTabelaFixa,
+            styles: {
+                font: "times",
+                fontSize: 10,
+                cellPadding: 4,
+                overflow: 'linebreak',
+                valign: 'middle',
+                minCellHeight: 8
+            },
+            head: [
+                [
+                    {
+                        content: grupo,
+                        colSpan: 3,
+                        styles: {
+                            halign: 'center',
+                            fillColor: [11, 109, 184],
+                            textColor: 255,
+                            fontStyle: 'bold',
+                            fontSize: 10,
+                            cellPadding: 6
+                        }
+                    }
+                ],
+                [
+                    {
+                        content: 'Atividade',
+                        styles: {
+                            halign: 'center',
+                            fontStyle: 'bold',
+                            textColor: 0,
+                            cellPadding: 4
+                        }
+                    },
+                    {
+                        content: 'Descrição da Atividade',
+                        styles: {
+                            halign: 'center',
+                            fontStyle: 'bold',
+                            textColor: 0,
+                            cellPadding: 4
+                        }
+                    },
+                    {
+                        content: 'Pontuação',
+                        styles: {
+                            halign: 'center',
+                            fontStyle: 'bold',
+                            textColor: 0,
+                            cellPadding: 4
+                        }
+                    }
+                ]
+            ],
+            body: atividadesDoGrupo.map(atividade => [
+                atividade.tipo,
+                `${atividade.nome} (${atividade.periodo})`,
+                `${atividade.horasValidadas}h`
+            ]),
+            // LARGURAS FIXAS PARA AS CÉLULAS
+            columnStyles: {
+                0: {
+                    cellWidth: 60,  // Largura fixa para a coluna Atividade
+                    fontStyle: 'normal'
+                },
+                1: {
+                    cellWidth: 85,  // Largura fixa para a coluna Descrição
+                    fontStyle: 'normal'
+                },
+                2: {
+                    cellWidth: 25,  // Largura fixa para a coluna Pontuação
+                    halign: 'center',
+                    fontStyle: 'normal'
+                }
+            },
+            headStyles: {
+                fillColor: [230, 230, 230],
+                textColor: 0,
+                fontStyle: 'bold',
+                cellPadding: 4
+            },
+            bodyStyles: {
+                cellPadding: 4,
+                fontStyle: 'normal'
+            },
+            alternateRowStyles: {
+                fillColor: [250, 250, 250]
+            },
+            theme: 'grid'
+        });
+
+        // Atualizar startYTable para a próxima tabela
+        if (doc.autoTable.previous && doc.autoTable.previous.finalY) {
+            startYTable = doc.autoTable.previous.finalY;
+        } else {
+            startYTable += 50;
+        }
+    }
+
+    // ADICIONAR TABELA DE RESUMO COM TOTAL
+    // Verificar se precisa de nova página antes de adicionar a tabela de resumo
+    const alturaDisponivelResumo = alturaPagina - startYTable - margemInferior;
+    const alturaMinimaTabelaResumo = 15;
+
+    if (alturaDisponivelResumo < alturaMinimaTabelaResumo) {
+        doc.addPage();
+        doc.setPage(doc.internal.getNumberOfPages());
+        startYTable = margemTopo;
+    }
+
+    // TABELA DE RESUMO COM FORMATAÇÃO IGUAL AO CABEÇALHO DO GRUPO
+    doc.autoTable({
+        startY: startYTable,
+        margin: margin,
+        tableWidth: larguraTabelaFixa,
+        styles: {
+            font: "times",
+            fontSize: 10,
+            cellPadding: 4,
+            valign: 'middle'
+        },
+        body: [
+            [
+                {
+                    content: 'Total:',
+                    colSpan: 2,
+                    styles: {
+                        halign: 'right',
+                        fontStyle: 'bold',
+                        textColor: 255, // Texto branco
+                        cellPadding: 6,
+                        fillColor: [11, 109, 184] // Mesma cor do cabeçalho do grupo
+                    }
+                },
+                {
+                    content: `${totalHorasValidadas}h`,
+                    styles: {
+                        halign: 'center',
+                        fontStyle: 'bold',
+                        textColor: 255, // Texto branco
+                        cellPadding: 6,
+                        fillColor: [11, 109, 184] // Mesma cor do cabeçalho do grupo
+                    }
+                }
+            ]
+        ],
+        // LARGURAS FIXAS PARA A TABELA DE RESUMO
+        columnStyles: {
+            0: {
+                cellWidth: 145, // Colspan 2 ocupa 60 + 85 = 145mm
+                fontStyle: 'bold'
+            },
+            1: {
+                cellWidth: 0,   // Coluna oculta pelo colspan
+                fontStyle: 'bold'
+            },
+            2: {
+                cellWidth: 25,  // Mesma largura da coluna Pontuação
+                halign: 'center',
+                fontStyle: 'bold'
+            }
+        },
+        bodyStyles: {
+            cellPadding: 4
+        },
+        theme: 'grid'
+    });
+
+    // ---------- CONSIDERAÇÕES FINAIS ----------
+    doc.addPage();
+    const paginaConsideracoes = doc.internal.getNumberOfPages();
+    paginasSumario.consideracoesFinais = paginaConsideracoes;
+    doc.setPage(doc.internal.getNumberOfPages());
+    cursorY = margemTopo + EspacamentoEntreLinhas;
+
+    doc.setFont("times", "bold");
+    doc.setFontSize(12);
+    doc.text("5. CONSIDERAÇÕES FINAIS", margemEsquerda + (0.63 * 10), cursorY, { align: 'left' });
+    cursorY += EspacamentoEntreLinhas + (4 * pts_em_mm);
+
+    const consideracoes_p1 = `O discente ${nomeAluno} concluiu a carga horária total de ${totalHorasValidadas} horas de Atividades Complementares, distribuídas em ${gruposComAtividades} grupos, conforme exigido. Todas as atividades aqui relatadas possuem documentação comprobatória válida, que é anexada a este processo para a devida análise e parecer do professor responsável, nos termos do Art. 2º do regulamento.`;
+
+    const consideracoes_p2 = "Espera-se, portanto, a apreciação e a homologação das horas pleiteadas para a integralização deste componente curricular obrigatório.";
+
+    let yApos_cp1 = TextoJustificadoComEspacamentoPrimeiraLinha(doc, consideracoes_p1, margemEsquerda, cursorY, larguraUtil, EspacamentoEntreLinhas, 12.5);
+    cursorY = yApos_cp1;
+    let yApos_cp2 = TextoJustificadoComEspacamentoPrimeiraLinha(doc, consideracoes_p2, margemEsquerda, cursorY, larguraUtil, EspacamentoEntreLinhas, 12.5);
+    cursorY = yApos_cp2;
+
+    // ---------- ANEXOS ----------
+    doc.addPage();
+    const paginaAnexos = doc.internal.getNumberOfPages();
+    paginasSumario.anexos = paginaAnexos;
+    doc.setPage(doc.internal.getNumberOfPages());
+
+    doc.setFont("times", "bold");
+    doc.setFontSize(16);
+    doc.text("ANEXOS", margemEsquerda + (larguraUtil / 2), margemTopo - (EspacamentoEntreLinhas) + (alturaUtil / 2), { align: 'center' });
+
+    doc.setFont("times", "normal");
+    doc.setFontSize(12);
+    doc.text("DOCUMENTOS COMPROBATÓRIOS", margemEsquerda + (larguraUtil / 2), margemTopo + (EspacamentoEntreLinhas) + (alturaUtil / 2), { align: 'center' });
+
+    // ---------- ATUALIZAR SUMÁRIO COM NÚMEROS CORRETOS ----------
+    // Voltar para a página do sumário e atualizar os números
+    doc.setPage(paginaSumario);
+
+    // Limpar o sumário existente
+    doc.setFillColor(255, 255, 255);
+    doc.rect(margemEsquerda, margemTopo + 3 * EspacamentoEntreLinhasSimples,
+        larguraUtil, 150, 'F');
+
+    sumarioY = margemTopo + 4 * EspacamentoEntreLinhasSimples;
+
+    // Redesenhar o sumário com os números corretos (numeração textual)
+    const itensSumarioAtualizado = [
+        { titulo: "1.  INTRODUÇÃO", pagina: paginaIntroducao - 1 }, // Introdução é a página paginaIntroducao - 1 (capa)
+        { titulo: "2.  OBJETIVO DO RELATÓRIO", pagina: paginaIntroducao - 1 }, // Mesma página da introdução
+        { titulo: "3.  METODOLOGIA E APRESENTAÇÃO DAS ATIVIDADES", pagina: paginaIntroducao - 1 }, // Mesma página
+        { titulo: "4.  TABELA-RESUMO DAS ATIVIDADES COMPLEMENTARES", pagina: paginasSumario.tabelaResumo - 1 },
+        { titulo: "5.  CONSIDERAÇÕES FINAIS", pagina: paginasSumario.consideracoesFinais - 1 },
+        { titulo: "ANEXOS", pagina: paginasSumario.anexos }
+    ];
+
+    itensSumarioAtualizado.forEach(item => {
+        sumarioY = desenharLinhaSumario(item.titulo, item.pagina, sumarioY);
+    });
+
+    // ---------- ADICIONAR NUMERAÇÃO APENAS NA PARTE TEXTUAL ----------
+    const totalPagesRelatorio = doc.internal.getNumberOfPages();
+    let numeroPaginaTextual = paginaIntroducao - 1; // Começa da introdução
+
+    for (let i = 1; i <= totalPagesRelatorio; i++) {
+        doc.setPage(i);
+
+        // Só adiciona numeração a partir da página da introdução
+        if (i >= paginaIntroducao) {
+            adicionarNumeroPagina(doc, numeroPaginaTextual);
+            numeroPaginaTextual++;
+        }
+    }
+
+    // Retornar o relatório textual (sem comprovantes) como ArrayBuffer
+    return doc.output('arraybuffer');
+}
+
+/**
+ * Obtém atividades do usuário para o relatório
+ */
+function getAtividadesPorUsuario(usuario) {
     return new Promise((resolve, reject) => {
         const atividades = [];
-
         const transaction = db.transaction("atividades", "readonly");
         const store = transaction.objectStore("atividades");
         const index = store.index("usuario");
-        const request = index.openCursor(IDBKeyRange.only(currentUser.username));
+        const request = index.openCursor(IDBKeyRange.only(usuario));
 
         request.onsuccess = function (e) {
             const cursor = e.target.result;
             if (cursor) {
-                atividades.push({
-                    nome: cursor.value.nome,
-                    tipo: cursor.value.tipo,
-                    horasRegistradas: cursor.value.horasRegistradas,
-                    horasValidadas: cursor.value.horasValidadas,
-                    periodo: cursor.value.periodo,
-                    status: cursor.value.status
-                });
+                atividades.push(cursor.value);
                 cursor.continue();
             } else {
-                atividades.sort((a, b) => b.periodo.localeCompare(a.periodo));
                 resolve(atividades);
             }
         };
 
-        request.onerror = () => reject(new Error("Erro ao carregar atividades"));
+        request.onerror = () => reject("Erro ao carregar atividades");
     });
 }
 
@@ -2362,6 +3444,3 @@ function showSystemMessage(message, type) {
         messageContainer.remove();
     }, 5000);
 }
-
-
-
