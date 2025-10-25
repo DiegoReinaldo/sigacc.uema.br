@@ -1214,7 +1214,129 @@ body {
     }
 }
 
+/* Estilos para os botões do preview */
+.btn-primary {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 0 4px;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 0 4px;
+}
+
+.btn-primary:hover {
+    background: #0056b3;
+}
+
+.btn-secondary:hover {
+    background: #545b62;
+}
+
 .login-container,
 #mainScreen {
     animation: fadeIn 0.6s ease-out forwards;
+}
+
+/* Estilos para os modais (comprovante e relatório) */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content-preview {
+    background: white;
+    width: 90%;
+    max-width: 900px;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--light-gray);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--off-white);
+    border-radius: 8px 8px 0 0;
+}
+
+.modal-header h2 {
+    color: var(--dark-blue);
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.modal-body {
+    flex: 1;
+    padding: 20px;
+    overflow: auto;
+    background: white;
+}
+
+.modal-body iframe {
+    border: 1px solid var(--light-gray);
+    border-radius: 4px;
+    width: 100%;
+}
+
+.modal-footer {
+    padding: 20px;
+    border-top: 1px solid var(--light-gray);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    background: var(--off-white);
+    border-radius: 0 0 8px 8px;
+}
+
+.btn-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: var(--dark-gray);
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color var(--transition);
+}
+
+.btn-close:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+    color: var(--dark-blue);
+}
+
+/* Remova estilos antigos se existirem */
+.overlay,
+.preview-container,
+.preview-header,
+.preview-actions {
+    display: none;
 }
