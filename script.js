@@ -157,7 +157,7 @@ const configAtividades = { // Traz todas as configurações necessárias para o 
         restricao: 'periodo'
     },
     'Disciplinas cursadas com aprovação': {
-        maxHorasValidadas: 90,
+        maxHorasValidadas: 60,
         maxHoras: 90,
         restricao: 'registro'
     },
@@ -3444,3 +3444,4 @@ function showSystemMessage(message, type) {
         messageContainer.remove();
     }, 5000);
 }
+
