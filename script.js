@@ -1168,7 +1168,7 @@ function atualizarTabela() { // Função para atualizar a tabela de exibição d
                                 <span class="btn-close" onclick="fecharPreviewComprovante()">×</span>
                             </div>
                             <div class="modal-body">
-                                <iframe id="previewComprovanteIframe" width="100%" height="500px"></iframe>
+                                <iframe id="previewComprovanteIframe" width="100%" height="800px"></iframe>
                             </div>
                             <div class="modal-footer">
                                 <button class="form-btn secondary" onclick="fecharPreviewComprovante()">Fechar</button>
@@ -2490,61 +2490,65 @@ async function getPdfInfo(arrayBuffer) {
 }
 
 /**
- * Função principal que combina relatório + comprovantes
+ * Função principal que combina relatório + comprovantes na ORDEM DA TABELA
  */
 async function gerarRelatorioCompleto() {
     try {
         // 1. Gerar o relatório textual (ABNT) com numeração
         const relatorioArrayBuffer = await criarRelatorioCompletoABNT();
 
-        // 2. Obter atividades para processar comprovantes
+        // 2. Obter atividades ORDENADAS POR GRUPO (igual à tabela do relatório)
         const atividades = await getAtividadesPorUsuario(currentUser.username);
         const atividadesAprovadas = atividades.filter(a => a.status === 'Aprovado');
 
-        // 3. Coletar comprovantes das atividades aprovadas
-        const comprovantes = [];
-        atividadesAprovadas.forEach(atividade => {
-            if (atividade.comprovante) {
-                comprovantes.push({
-                    id: atividade.id,
-                    nome: atividade.nome,
-                    comprovante: atividade.comprovante
-                });
-            }
-        });
+        // 3. ORDENAR atividades na MESMA ORDEM da tabela do relatório (por grupo)
+        const atividadesOrdenadas = [];
 
-        // 4. Preparar comprovantes (sem numeração)
+        // Percorrer os grupos na mesma ordem usada no relatório
+        for (const grupo of gruposAtividades) {
+            // Filtrar atividades deste grupo
+            const atividadesDoGrupo = atividadesAprovadas.filter(atividade => {
+                for (const grupoKey in AtividadesPorGrupo) {
+                    if (AtividadesPorGrupo[grupoKey].includes(atividade.tipo)) {
+                        return grupoKey === grupo;
+                    }
+                }
+                return false;
+            });
+
+            // Adicionar atividades do grupo à lista ordenada
+            atividadesOrdenadas.push(...atividadesDoGrupo);
+        }
+
+        // 4. Coletar comprovantes na MESMA ORDEM das atividades ordenadas
         const comprovantesProcessados = [];
 
-        for (const comprovante of comprovantes) {
+        for (const atividade of atividadesOrdenadas) {
             try {
-                if (comprovante.comprovante && comprovante.comprovante.byteLength > 0) {
-                    // Encontrar a atividade correspondente para obter período
-                    const atividade = atividadesAprovadas.find(a => a.id === comprovante.id);
-
+                if (atividade.comprovante && atividade.comprovante.byteLength > 0) {
                     // Criar página de identificação (sem numeração) - já retorna ArrayBuffer
                     const paginaIdArrayBuffer = await criarPaginaIdentificacaoComprovante(
-                        comprovante.nome,
-                        atividade ? atividade.periodo : 'N/A'
+                        atividade.nome,
+                        atividade.periodo
                     );
 
                     // Adicionar página de identificação + comprovante real
-                    comprovantesProcessados.push(paginaIdArrayBuffer); // Já é ArrayBuffer
-                    comprovantesProcessados.push(comprovante.comprovante);
+                    comprovantesProcessados.push(paginaIdArrayBuffer);
+                    comprovantesProcessados.push(atividade.comprovante);
                 }
             } catch (error) {
-                console.error(`Erro ao processar comprovante ${comprovante.id}:`, error);
+                console.error(`Erro ao processar comprovante ${atividade.id}:`, error);
 
-                // Fallback em caso de erro - também retorna ArrayBuffer
+                // Fallback em caso de erro
                 const fallbackArrayBuffer = await criarPaginaIdentificacaoComprovante(
-                    comprovante.nome,
+                    atividade.nome,
                     'Erro no processamento do comprovante'
                 );
-                comprovantesProcessados.push(fallbackArrayBuffer); // Já é ArrayBuffer
+                comprovantesProcessados.push(fallbackArrayBuffer);
             }
         }
 
-        // 5. Combinar relatório (com numeração) + comprovantes (sem numeração)
+        // 5. Combinar relatório (com numeração) + comprovantes (sem numeração) na ORDEM CORRETA
         const todosPdfs = [relatorioArrayBuffer, ...comprovantesProcessados];
         const pdfCombinado = await combinarPDFs(todosPdfs);
 
@@ -2984,7 +2988,7 @@ async function criarRelatorioCompletoABNT() {
     doc.setFont("times", "bold");
     doc.setFontSize(12);
     doc.text("4.  TABELA-RESUMO DAS ATIVIDADES COMPLEMENTARES", margemEsquerda + (0.63 * 10), cursorY, { align: 'left' });
-    cursorY += 2 * EspacamentoEntreLinhas;
+    cursorY += EspacamentoEntreLinhas + (4 * pts_em_mm);
 
     let startYTable = cursorY;
 
@@ -3047,7 +3051,7 @@ async function criarRelatorioCompletoABNT() {
                         content: 'Atividade',
                         styles: {
                             halign: 'center',
-                            fontStyle: 'bold',
+                            fontStyle: 'normal',
                             textColor: 0,
                             cellPadding: 4
                         }
@@ -3056,7 +3060,7 @@ async function criarRelatorioCompletoABNT() {
                         content: 'Descrição da Atividade',
                         styles: {
                             halign: 'center',
-                            fontStyle: 'bold',
+                            fontStyle: 'normal',
                             textColor: 0,
                             cellPadding: 4
                         }
@@ -3065,7 +3069,7 @@ async function criarRelatorioCompletoABNT() {
                         content: 'Pontuação',
                         styles: {
                             halign: 'center',
-                            fontStyle: 'bold',
+                            fontStyle: 'normal',
                             textColor: 0,
                             cellPadding: 4
                         }
@@ -3444,4 +3448,3 @@ function showSystemMessage(message, type) {
         messageContainer.remove();
     }, 5000);
 }
-
