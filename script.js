@@ -344,7 +344,7 @@ let isDev = false;
 let horasChart = null;
 
 // Inicialização do IndexedDB
-const request = indexedDB.open("SIGACC_DB", 15);
+const request = indexedDB.open("para_teste", 15);
 
 request.onupgradeneeded = function (event) {
     db = event.target.result;
@@ -410,7 +410,7 @@ request.onsuccess = function (event) {
 
 request.onerror = function (event) {
     console.error("Erro no IndexedDB", event);
-    showError("Erro ao inicializar o banco de dados. Tente recarregar a página.");
+    mostrarErroMensagem("Erro ao inicializar o banco de dados. Tente recarregar a página.");
 };
 
 // Funções auxiliares
@@ -420,13 +420,12 @@ function popularSelects() {
         document.getElementById("tipoEdicao")
     ];
 
+    // Limpa os selects principais e adiciona opção com valor "padrao"
     selects.forEach(select => {
-        select.innerHTML = '<option value="">Selecione um tipo</option>';
+        select.innerHTML = '<option value="padrao">Selecione uma opção</option>';
     });
 
-    const filtroSelect = document.getElementById("filtroTipo");
-    filtroSelect.innerHTML = '<option value="Todos">Todos os tipos</option>';
-
+    // Popula com as opções reais
     opcoesAtividades.forEach(opt => {
         selects.forEach(select => {
             const option = document.createElement("option");
@@ -434,16 +433,23 @@ function popularSelects() {
             option.textContent = opt;
             select.appendChild(option);
         });
-
-        const filtroOption = document.createElement("option");
-        filtroOption.value = opt;
-        filtroOption.textContent = opt;
-        filtroSelect.appendChild(filtroOption);
     });
 
-    // Adiciona o select para grupos
+    // Filtro de tipo
+    const filtroSelect = document.getElementById("filtroTipo");
+    filtroSelect.innerHTML = '<option value="Todos">Todos os tipos</option>';
+
+    opcoesAtividades.forEach(opt => {
+        const option = document.createElement("option");
+        option.value = opt;
+        option.textContent = opt;
+        filtroSelect.appendChild(option);
+    });
+
+    // Filtro de grupo
     const filtroGrupo = document.getElementById("filtroGrupo");
     filtroGrupo.innerHTML = '<option value="Todos">Todos os grupos</option>';
+
     gruposAtividades.forEach(grupo => {
         const option = document.createElement("option");
         option.value = grupo;
@@ -451,8 +457,237 @@ function popularSelects() {
         filtroGrupo.appendChild(option);
     });
 
-    // Adiciona o event listener para o filtro de grupo
-    filtroGrupo.addEventListener("change", atualizarFiltroTipoPorGrupo);
+    const grupoSelect = document.getElementById("filtroGrupo");
+    const tipoSelect = document.getElementById("filtroTipo");
+
+    // Adiciona o event listener para o filtro de grupo e para o filtro de tipo
+    grupoSelect.removeEventListener("change", atualizarFiltroTipoPorGrupo);
+    tipoSelect.removeEventListener("change", atualizarFiltroGrupoPorTipo);
+
+    grupoSelect.addEventListener("change", atualizarFiltroTipoPorGrupo);
+    tipoSelect.addEventListener("change", atualizarFiltroGrupoPorTipo);
+
+    // Adicionar funcionalidade de pesquisa aos selects
+    adicionarPesquisaIntegradaAosSelects();
+}
+
+function adicionarPesquisaIntegradaAosSelects() {
+    const selectIds = ['tipo', 'tipoEdicao', 'filtroTipo', 'filtroGrupo'];
+
+    selectIds.forEach(selectId => {
+        const originalSelect = document.getElementById(selectId);
+        if (!originalSelect) return;
+
+        // Verificar se já foi convertido
+        if (originalSelect.classList.contains('hidden-original')) {
+            return;
+        }
+
+        // Criar container
+        const container = document.createElement('div');
+        container.className = 'searchable-select-wrapper';
+        container.style.position = 'relative';
+        container.style.width = '100%';
+
+        // Criar select personalizado
+        const customSelect = document.createElement('div');
+        customSelect.className = 'custom-select';
+        customSelect.style.cssText = `
+            width: 100%;
+            padding: 14px 35px 14px 14px;
+            border: 2px solid var(--light-gray);
+            border-radius: var(--border-radius);
+            background: white;
+            cursor: pointer;
+            position: relative;
+            min-height: 38px;
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+            color: rgb(51, 51, 51);
+        `;
+
+        // Texto do select - usa o texto da opção selecionada ou padrão
+        const selectText = document.createElement('span');
+        selectText.className = 'select-text';
+
+        // Define o texto baseado no select atual
+        const selectedOption = originalSelect.options[originalSelect.selectedIndex];
+        selectText.textContent = selectedOption ? selectedOption.text : 'Selecione uma opção';
+        selectText.style.cssText = `
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        `;
+
+        // Ícone de lupa
+        const searchIcon = document.createElement('i');
+        searchIcon.className = 'fas fa-search select-search-integrated-icon';
+        searchIcon.style.cssText = `
+            position: absolute;
+            right: 10px;
+            color: #666;
+            font-size: 14px;
+        `;
+
+        // Dropdown com pesquisa
+        const dropdown = document.createElement('div');
+        dropdown.className = 'select-dropdown';
+        dropdown.style.cssText = `
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            z-index: 1000;
+            display: none;
+            max-height: 300px;
+            overflow: hidden;
+        `;
+
+        // Input de pesquisa dentro do dropdown
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.placeholder = 'Pesquisar...';
+        searchInput.className = 'dropdown-search-input';
+        searchInput.style.cssText = `
+            width: 100%;
+            padding: 8px 10px;
+            border: none;
+            border-bottom: 1px solid #eee;
+            outline: none;
+            box-sizing: border-box;
+            font-size: 14px;
+        `;
+
+        // Lista de opções
+        const optionsList = document.createElement('div');
+        optionsList.className = 'select-options';
+        optionsList.style.cssText = `
+            max-height: 250px;
+            overflow-y: auto;
+        `;
+
+        // Adicionar elementos ao DOM
+        customSelect.appendChild(selectText);
+        customSelect.appendChild(searchIcon);
+        dropdown.appendChild(searchInput);
+        dropdown.appendChild(optionsList);
+        container.appendChild(customSelect);
+        container.appendChild(dropdown);
+
+        // Substituir o select original
+        originalSelect.parentNode.insertBefore(container, originalSelect);
+
+        // Ocultar completamente o select original
+        originalSelect.classList.add('hidden-original');
+        originalSelect.style.display = 'none';
+        originalSelect.style.position = 'absolute';
+        originalSelect.style.left = '-9999px';
+
+        // Popular opções
+        function populateOptions(filter = '') {
+            optionsList.innerHTML = '';
+            const options = Array.from(originalSelect.options);
+            const filteredOptions = options.filter(option =>
+                option.text.toLowerCase().includes(filter.toLowerCase()) && option.value !== "padrao"
+            );
+
+            if (filteredOptions.length === 0) {
+                const noResults = document.createElement('div');
+                noResults.textContent = 'Nenhum resultado encontrado';
+                noResults.style.cssText = `
+                    padding: 10px;
+                    color: #999;
+                    text-align: center;
+                    font-size: 14px;
+                `;
+                optionsList.appendChild(noResults);
+                return;
+            }
+
+            filteredOptions.forEach(option => {
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'select-option';
+                optionDiv.textContent = option.text;
+                optionDiv.style.cssText = `
+                    padding: 8px 10px;
+                    cursor: pointer;
+                    border-bottom: 1px solid #f0f0f0;
+                    font-size: 14px;
+                    transition: background-color 0.2s ease;
+                `;
+
+                optionDiv.addEventListener('mouseenter', function () {
+                    this.style.backgroundColor = '#f5f5f5';
+                });
+
+                optionDiv.addEventListener('mouseleave', function () {
+                    this.style.backgroundColor = '';
+                });
+
+                optionDiv.addEventListener('click', function () {
+                    originalSelect.value = option.value;
+                    selectText.textContent = option.text;
+                    dropdown.style.display = 'none';
+                    searchInput.value = '';
+
+                    // Disparar evento change no select original
+                    const event = new Event('change', { bubbles: true });
+                    originalSelect.dispatchEvent(event);
+                });
+
+                optionsList.appendChild(optionDiv);
+            });
+        }
+
+        // Event listeners
+        customSelect.addEventListener('click', function (e) {
+            e.stopPropagation();
+            const isOpen = dropdown.style.display === 'block';
+            dropdown.style.display = isOpen ? 'none' : 'block';
+
+            if (!isOpen) {
+                populateOptions();
+                setTimeout(() => searchInput.focus(), 10);
+            }
+        });
+
+        searchInput.addEventListener('input', function (e) {
+            populateOptions(e.target.value);
+        });
+
+        searchInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                dropdown.style.display = 'none';
+            }
+            if (e.key === 'Enter') {
+                const firstOption = optionsList.querySelector('.select-option');
+                if (firstOption) {
+                    firstOption.click();
+                }
+            }
+        });
+
+        // Fechar dropdown ao clicar fora
+        document.addEventListener('click', function () {
+            dropdown.style.display = 'none';
+            searchInput.value = '';
+            populateOptions();
+        });
+
+        // Prevenir fechamento quando clicar dentro do dropdown
+        dropdown.addEventListener('click', function (e) {
+            e.stopPropagation();
+        });
+
+        // Inicializar opções
+        populateOptions();
+    });
 }
 
 function atualizarFiltroTipoPorGrupo() {
@@ -488,9 +723,81 @@ function atualizarFiltroTipoPorGrupo() {
         });
     }
 
-    // Tenta restaurar a seleção anterior, se ainda estiver disponível
-    if (tipoSelecionado && Array.from(tipoSelect.options).some(opt => opt.value === tipoSelecionado)) {
-        tipoSelect.value = tipoSelecionado;
+    // Tenta restaurar a seleção anterior apenas se for compatível com o grupo selecionado
+    if (tipoSelecionado && tipoSelecionado !== "Todos") {
+        const tipoCompativel = Array.from(tipoSelect.options).some(opt =>
+            opt.value === tipoSelecionado
+        );
+
+        if (tipoCompativel) {
+            tipoSelect.value = tipoSelecionado;
+        } else {
+            // Se o tipo anterior não é compatível com o grupo, volta para "Todos"
+            tipoSelect.value = "Todos";
+        }
+    }
+}
+
+function atualizarFiltroGrupoPorTipo() {
+    const tipoSelect = document.getElementById("filtroTipo");
+    const grupoSelect = document.getElementById("filtroGrupo");
+    const tipoSelecionado = tipoSelect.value;
+
+    // Salva o grupo selecionado atual (se houver)
+    const grupoSelecionado = grupoSelect.value;
+
+    // Limpa o select de grupo
+    grupoSelect.innerHTML = '<option value="Todos">Todos os grupos</option>';
+
+    // Se um tipo específico foi selecionado, encontra seu grupo
+    if (tipoSelecionado !== "Todos") {
+        let grupoDoTipo = null;
+
+        // Procura em qual grupo o tipo selecionado está
+        for (const grupo in AtividadesPorGrupo) {
+            if (AtividadesPorGrupo[grupo].includes(tipoSelecionado)) {
+                grupoDoTipo = grupo;
+                break;
+            }
+        }
+
+        // Se encontrou o grupo, mostra apenas esse grupo
+        if (grupoDoTipo) {
+            const option = document.createElement("option");
+            option.value = grupoDoTipo;
+            option.textContent = grupoDoTipo;
+            grupoSelect.appendChild(option);
+        } else {
+            // Se não encontrou (teoricamente não deveria acontecer), mostra todos
+            gruposAtividades.forEach(grupo => {
+                const option = document.createElement("option");
+                option.value = grupo;
+                option.textContent = grupo;
+                grupoSelect.appendChild(option);
+            });
+        }
+    } else {
+        // Se "Todos" foi selecionado, mostra todos os grupos
+        gruposAtividades.forEach(grupo => {
+            const option = document.createElement("option");
+            option.value = grupo;
+            option.textContent = grupo;
+            grupoSelect.appendChild(option);
+        });
+    }
+
+    // Tenta restaurar a seleção anterior apenas se for compatível com o tipo selecionado
+    if (grupoSelecionado && grupoSelecionado !== "Todos") {
+        const grupoCompativel = Array.from(grupoSelect.options).some(opt =>
+            opt.value === grupoSelecionado
+        );
+
+        if (grupoCompativel) {
+            grupoSelect.value = grupoSelecionado;
+        } else {
+            // Se o grupo anterior não é compatível com o tipo, volta para "Todos"
+            grupoSelect.value = "Todos";
+        }
     }
 }
 
@@ -507,7 +814,7 @@ function initEventListeners() {
     document.getElementById("limparFiltrosBtn").addEventListener("click", limparFiltros);
     document.getElementById("imprimirBtn").addEventListener("click", handleImprimir);
     document.getElementById("cancelarEdicaoBtn").addEventListener("click", limparEdicao);
-    document.getElementById("tabsContainer").addEventListener("click", handleTabClick);
+    document.getElementById("tabsContainer").addEventListener("click", lidarComCliqueNaAba);
 
     // Botões de exportação e importação
     document.getElementById("exportBtn").addEventListener("click", exportarDados);
@@ -525,7 +832,7 @@ function initEventListeners() {
     // então não precisamos adicioná-lo aqui novamente
 }
 
-function formatFileSize(bytes) {
+function formatarTamanhoDoArquivo(bytes) {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB'];
@@ -541,7 +848,7 @@ function handleLoginSubmit(e) {
     const isLoginMode = document.getElementById("loginTitle").textContent === "Login";
 
     if (!username || !password) {
-        showError('Por favor, preencha todos os campos.');
+        mostrarErroMensagem('Por favor, preencha todos os campos.');
         return;
     }
 
@@ -551,17 +858,17 @@ function handleLoginSubmit(e) {
         const matricula = document.getElementById("matricula").value.trim();
 
         if (!nomeCompleto || !matricula) {
-            showError('Por favor, preencha todos os campos.');
+            mostrarErroMensagem('Por favor, preencha todos os campos.');
             return;
         }
 
         if (!validarMatricula(matricula)) {
-            showError('Matrícula inválida');
+            mostrarErroMensagem('Matrícula inválida');
             return;
         }
     }
 
-    hideMessages();
+    ocultarMensagens();
     const submitBtn = document.getElementById("submitBtn");
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
     submitBtn.disabled = true;
@@ -587,14 +894,14 @@ function handleLoginSubmit(e) {
                     currentUser = user;
                     iniciarApp();
                 } else {
-                    showError("Usuário ou senha inválidos!");
+                    mostrarErroMensagem("Usuário ou senha inválidos!");
                     submitBtn.innerHTML = 'Entrar';
                     submitBtn.disabled = false;
                 }
             } else {
                 // Modo de registro
                 if (user) {
-                    showError("Usuário já existe!");
+                    mostrarErroMensagem("Usuário já existe!");
                     submitBtn.innerHTML = 'Registrar';
                     submitBtn.disabled = false;
                 } else {
@@ -618,13 +925,13 @@ function handleLoginSubmit(e) {
                         submitBtn.disabled = false;
                     }, 2000);
 
-                    showSuccess("Registro realizado com sucesso! Faça login.");
+                    mostrarSucessoMensagem("Registro realizado com sucesso! Faça login.");
                 }
             }
         };
 
         req.onerror = function () {
-            showError("Erro ao acessar o banco de dados");
+            mostrarErroMensagem("Erro ao acessar o banco de dados");
             submitBtn.innerHTML = isLoginMode ? 'Entrar' : 'Registrar';
             submitBtn.disabled = false;
         };
@@ -673,7 +980,7 @@ function toggleLoginMode() {
         document.getElementById("nomeCompleto").removeAttribute("required");
         document.getElementById("matricula").removeAttribute("required");
     }
-    hideMessages();
+    ocultarMensagens();
 }
 
 function togglePasswordVisibility() {
@@ -745,7 +1052,7 @@ function logout() {
         document.getElementById("loginForm").reset();
         document.getElementById("formCadastro").reset();
 
-        hideMessages();
+        ocultarMensagens();
 
         submitBtn.innerHTML = 'Entrar';
         submitBtn.disabled = false;
@@ -757,7 +1064,7 @@ function mostrarSobre() {
 }
 
 // Funções das Abas e Telas Usuário
-function handleTabClick(e) { // Habilita os clicks nas abas permitindo acessar os conteúdos 
+function lidarComCliqueNaAba(e) { // Habilita os clicks nas abas permitindo acessar os conteúdos 
     if (e.target.classList.contains("tab")) {
         const tabs = document.querySelectorAll(".tab");
         const tabId = e.target.dataset.tab;
@@ -781,7 +1088,7 @@ function handleTabClick(e) { // Habilita os clicks nas abas permitindo acessar o
     }
 }
 
-function fileToArrayBuffer(file) { // Função para converter arquivo para ArrayBuffer
+function arquivoParaArrayBuffer(file) { // Função para converter arquivo para ArrayBuffer
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result);
@@ -801,22 +1108,27 @@ async function handleCadastroSubmit(e) { // Cadastro de atividades
     const comprovanteFile = comprovanteInput.files[0];
 
     if (!nome || !tipo || isNaN(horas) || horas < 0 || !periodo) {
-        showSystemMessage("Preencha todos os campos obrigatórios", "error");
+        mostrarMensagemDoSistema("Preencha todos os campos obrigatórios", "error");
         return;
     }
 
-    // Usar currentUser.matricula em vez da variável não definida 'matricula'
+    if (tipo === 'padrao') {
+        mostrarMensagemDoSistema("Selecione um tipo de atividade", "error");
+        return;
+    }
+
+    // Verificar a atividade foi realizada durante o período do estudantes no curso
     if (!validarPeriodo(periodo, currentUser.matricula)) {
         const anoAtual = new Date().getFullYear();
         const anoIngresso = parseInt(currentUser.matricula.substring(0, 4), 10);
-        showSystemMessage(`Período inválido. Formato esperado: AAAA.S (ex: 2025.1) com ano entre ${anoIngresso}-${anoAtual}`, "error");
+        mostrarMensagemDoSistema(`Período inválido. Formato esperado: AAAA.S (ex: 2025.1) com ano entre ${anoIngresso}-${anoAtual}`, "error");
         return;
     }
 
     try {
         let comprovanteArrayBuffer = null;
         if (comprovanteFile) {
-            comprovanteArrayBuffer = await fileToArrayBuffer(comprovanteFile);
+            comprovanteArrayBuffer = await arquivoParaArrayBuffer(comprovanteFile);
         }
 
         // Sempre retorna 0 horas validadas se não houver comprovante
@@ -850,14 +1162,14 @@ async function handleCadastroSubmit(e) { // Cadastro de atividades
         request.onsuccess = function () {
             if (comprovanteArrayBuffer == null) {
                 // Mensagem específica para pendente
-                showSystemMessage("Atividade cadastrada com sucesso, porém sem comprovante comprobatório anexado.", "pending");
+                mostrarMensagemDoSistema("Atividade cadastrada com sucesso, porém sem comprovante comprobatório anexado.", "pending");
             } else if (horasValidadasEfetivas < horas) {
                 const motivo = horasValidadasEfetivas === 0
                     ? "limite global atingido para este tipo de atividade"
                     : "limites de horas atingidos";
-                showSystemMessage(`Atividade cadastrada, mas apenas ${horasValidadasEfetivas}h validadas (${motivo}).`, "success");
+                mostrarMensagemDoSistema(`Atividade cadastrada, mas apenas ${horasValidadasEfetivas}h validadas (${motivo}).`, "success");
             } else {
-                showSystemMessage("Atividade cadastrada com sucesso!", "success");
+                mostrarMensagemDoSistema("Atividade cadastrada com sucesso!", "success");
             }
 
             document.getElementById("formCadastro").reset();
@@ -865,7 +1177,7 @@ async function handleCadastroSubmit(e) { // Cadastro de atividades
             atualizarResumo();
         };
     } catch (error) {
-        showSystemMessage("Erro ao cadastrar atividade: " + error, "error");
+        mostrarMensagemDoSistema("Erro ao cadastrar atividade: " + error, "error");
     }
 }
 
@@ -897,7 +1209,7 @@ async function calcularHorasValidadas(tipo, horas, periodo, comprovante, exclude
     // Se horas = 0, retorne 0
     if (horas === 0) return 0;
 
-    // 1. Verificação de limite do grupo
+    // Verificação de limite do grupo
     const grupo = obterGrupoPorTipo(tipo);
     if (grupo) {
         const horasCadastradasGrupo = await consultarHorasCadastradasGrupo(grupo, excludeId);
@@ -905,7 +1217,6 @@ async function calcularHorasValidadas(tipo, horas, periodo, comprovante, exclude
         if (disponibilidadeGrupo <= 0) return 0;
     }
 
-    // Resto da função permanece igual...
     const horasCadastradasGlobal = await consultarHorasCadastradasGlobal(tipo, excludeId);
     const disponibilidadeGlobal = Math.max(0, configAtividades[tipo].maxHoras - horasCadastradasGlobal);
     if (disponibilidadeGlobal <= 0) return 0;
@@ -992,6 +1303,9 @@ async function consultarHorasCadastradasGrupo(grupo, excludeId = null) { //Funç
     });
 }
 
+/**
+ * As funções consultarHorasPorGrupo e verificarLimiteGrupo não estão mais sendo utilizadas na atual conjuntura do sitema
+ */
 async function consultarHorasPorGrupo(grupo, excludeId = null) { // Função para consultar horas validadas por grupo, isto é, a soma das horas validadas pra cada atividade do grupo temática
     return new Promise((resolve, reject) => {
         let totalHoras = 0;
@@ -1075,8 +1389,40 @@ async function consultarHorasPorTipo(tipo, periodo = null, excludeId = null) { /
     });
 }
 
-function limparCadastro() { // Função para limpar todos os campos da aba cadastro 
+function limparCadastro() {
     document.getElementById("formCadastro").reset();
+
+    // Resetar os componentes personalizados dos selects
+    const selects = ['tipo'];
+
+    selects.forEach(selectId => {
+        const originalSelect = document.getElementById(selectId);
+        if (!originalSelect) return;
+
+        // Resetar o select original
+        originalSelect.value = "";
+
+        // Atualizar o componente personalizado
+        const wrapper = originalSelect.previousElementSibling;
+        if (wrapper && wrapper.classList.contains('searchable-select-wrapper')) {
+            const selectText = wrapper.querySelector('.select-text');
+            if (selectText) {
+                selectText.textContent = "Selecione um tipo";
+            }
+
+            // Fechar dropdown se estiver aberto
+            const dropdown = wrapper.querySelector('.select-dropdown');
+            if (dropdown) {
+                dropdown.style.display = 'none';
+            }
+
+            // Limpar campo de pesquisa
+            const searchInput = wrapper.querySelector('.dropdown-search-input');
+            if (searchInput) {
+                searchInput.value = '';
+            }
+        }
+    });
 }
 
 function handleFiltroSubmit(e) { // Exibição de atividades
@@ -1084,13 +1430,48 @@ function handleFiltroSubmit(e) { // Exibição de atividades
     atualizarTabela();
 }
 
-function limparFiltros() { // Função para limpar todos os campos da aba minhas atividades 
+function limparFiltros() {
     document.getElementById("filtroGrupo").value = "Todos";
+    document.getElementById("filtroTipo").value = "Todos";
     document.getElementById("filtroPeriodo").value = "";
 
     // Atualiza o select de tipos para mostrar todos
     atualizarFiltroTipoPorGrupo();
 
+    // Resetar os componentes personalizados dos selects de filtro
+    const selectsFiltro = ['filtroGrupo', 'filtroTipo'];
+
+    selectsFiltro.forEach(selectId => {
+        const originalSelect = document.getElementById(selectId);
+        if (!originalSelect) return;
+
+        // Encontrar o wrapper do componente personalizado
+        const wrapper = originalSelect.previousElementSibling;
+        if (wrapper && wrapper.classList.contains('searchable-select-wrapper')) {
+            const selectText = wrapper.querySelector('.select-text');
+            if (selectText) {
+                // Definir o texto baseado no valor atual do select original
+                const selectedOption = originalSelect.options[originalSelect.selectedIndex];
+                selectText.textContent = selectedOption ? selectedOption.text :
+                    (selectId === 'filtroGrupo' ? 'Todos os grupos' : 'Todos os tipos');
+            }
+
+            // Fechar dropdown se estiver aberto
+            const dropdown = wrapper.querySelector('.select-dropdown');
+            if (dropdown) {
+                dropdown.style.display = 'none';
+            }
+
+            // Limpar campo de pesquisa
+            const searchInput = wrapper.querySelector('.dropdown-search-input');
+            if (searchInput) {
+                searchInput.value = '';
+            }
+        }
+    });
+
+
+    popularSelects(); // Atualiza a exibição dos filtros para o grupo e tipo
     atualizarTabela();
 }
 
@@ -1202,7 +1583,7 @@ function atualizarTabela() { // Função para atualizar a tabela de exibição d
     };
 
     request.onerror = function () {
-        showSystemMessage("Erro ao carregar atividades", "error");
+        mostrarMensagemDoSistema("Erro ao carregar atividades", "error");
     };
 }
 
@@ -1272,10 +1653,10 @@ async function visualizarComprovante(id) {
             // Mostrar o modal
             document.getElementById('previewComprovanteOverlay').style.display = 'flex';
         } else {
-            showSystemMessage("Nenhum comprovante disponível para esta atividade", "info");
+            mostrarMensagemDoSistema("Nenhum comprovante disponível para esta atividade", "info");
         }
     } catch (error) {
-        showSystemMessage("Erro ao carregar comprovante: " + error, "error");
+        mostrarMensagemDoSistema("Erro ao carregar comprovante: " + error, "error");
     }
 }
 
@@ -1303,7 +1684,7 @@ function fecharPreviewComprovante() {
  */
 function baixarComprovanteAtual() {
     if (!__CURRENT_COMPROVANTE_ID) {
-        showSystemMessage("Nenhum comprovante selecionado", "error");
+        mostrarMensagemDoSistema("Nenhum comprovante selecionado", "error");
         return;
     }
 
@@ -1342,10 +1723,10 @@ async function baixarComprovante(id) {
                 URL.revokeObjectURL(url);
             }, 100);
         } else {
-            showSystemMessage("Nenhum comprovante disponível para esta atividade", "info");
+            mostrarMensagemDoSistema("Nenhum comprovante disponível para esta atividade", "info");
         }
     } catch (error) {
-        showSystemMessage("Erro ao baixar comprovante: " + error, "error");
+        mostrarMensagemDoSistema("Erro ao baixar comprovante: " + error, "error");
     }
 }
 
@@ -1405,9 +1786,9 @@ async function exportarDados() {
             URL.revokeObjectURL(url);
         }, 100);
 
-        showSystemMessage("Dados exportados com sucesso!", "success");
+        mostrarMensagemDoSistema("Dados exportados com sucesso!", "success");
     } catch (error) {
-        showSystemMessage("Erro na exportação: " + error.message, "error");
+        mostrarMensagemDoSistema("Erro na exportação: " + error.message, "error");
     }
 }
 
@@ -1529,17 +1910,17 @@ async function importarDados() {
             await recalcularHorasGlobal();
 
             if (erros > 0) {
-                showSystemMessage(`${importadas} atividades importadas com sucesso! ${erros} erros ocorreram. Verifique o console para detalhes.`, "warning");
+                mostrarMensagemDoSistema(`${importadas} atividades importadas com sucesso! ${erros} erros ocorreram. Verifique o console para detalhes.`, "warning");
             } else {
-                showSystemMessage(`${importadas} atividades importadas com sucesso!`, "success");
+                mostrarMensagemDoSistema(`${importadas} atividades importadas com sucesso!`, "success");
             }
 
         } catch (error) {
             console.error("Erro na importação:", error);
             if (error.message.includes("incompatível")) {
-                showSystemMessage(error.message, "error", 10000);
+                mostrarMensagemDoSistema(error.message, "error", 10000);
             } else {
-                showSystemMessage("Erro na importação: " + error.message, "error");
+                mostrarMensagemDoSistema("Erro na importação: " + error.message, "error");
             }
         }
     };
@@ -1573,7 +1954,7 @@ function carregarEdicao(id) { // Função para Edição de atividades
                     <a href="#" onclick="baixarComprovante(${atividade.id}); return false;">
                         comprovante_${atividade.id}.pdf
                     </a> 
-                    (${formatFileSize(size)})
+                    (${formatarTamanhoDoArquivo(size)})
                 `;
             } else {
                 comprovanteInfo.textContent = "Nenhum comprovante cadastrado";
@@ -1582,7 +1963,7 @@ function carregarEdicao(id) { // Função para Edição de atividades
     };
 
     request.onerror = function () {
-        showSystemMessage("Erro ao carregar atividade para edição", "error");
+        mostrarMensagemDoSistema("Erro ao carregar atividade para edição", "error");
     };
 }
 
@@ -1603,7 +1984,7 @@ async function deletarAtividade(id) { // Função para deletar atividade atravé
     }
 
     if (idParaExcluir === undefined || idParaExcluir === null || isNaN(idParaExcluir)) {
-        showSystemMessage("ID inválido para exclusão. Selecione uma atividade primeiro.", "error");
+        mostrarMensagemDoSistema("ID inválido para exclusão. Selecione uma atividade primeiro.", "error");
         return;
     }
 
@@ -1618,7 +1999,7 @@ async function deletarAtividade(id) { // Função para deletar atividade atravé
         });
 
         if (!atividade) {
-            showSystemMessage("Atividade não encontrada no banco de dados", "error");
+            mostrarMensagemDoSistema("Atividade não encontrada no banco de dados", "error");
             return;
         }
 
@@ -1641,17 +2022,20 @@ async function deletarAtividade(id) { // Função para deletar atividade atravé
             await recalcularHorasGrupo(grupo);
         }
 
-        showSystemMessage("Atividade excluída com sucesso!", "success");
+        mostrarMensagemDoSistema("Atividade excluída com sucesso!", "success");
         document.getElementById("formEdicao").reset();
         atualizarTabela();
         atualizarResumo();
 
     } catch (error) {
-        showSystemMessage(`Erro ao excluir atividade: ${error}`, "error");
+        mostrarMensagemDoSistema(`Erro ao excluir atividade: ${error}`, "error");
     }
 }
 
-async function recalcularHorasGrupo(grupo) { // Função para recalcular as horas validadas de todos as atividades dos tipos de um grupo especificado. Usada quando há alguma alteração em uma atividade (edição) podendo liberar horas para outras atividades
+/**
+ * Função para recalcular as horas validadas de todos as atividades dos tipos de um grupo especificado. Usada quando há alguma alteração em uma atividade (edição) podendo liberar horas para outras atividades
+ */
+async function recalcularHorasGrupo(grupo) {
     try {
         const atividades = await new Promise((resolve, reject) => {
             const atividadesDoGrupo = [];
@@ -1778,7 +2162,10 @@ async function recalcularHorasGrupo(grupo) { // Função para recalcular as hora
     }
 }
 
-async function recalcularHorasGlobal() { // Função auxiliar pra recalcular as horas validadas de todas as atividades cadastradas para um determinado usuário (currentUser) visando evitar inconsistência nos calculos de horas validas, visto que, no código fonte, pode haver alteração nas constantes. A cada login, a função é chamada.
+/**
+ * Função auxiliar pra recalcular as horas validadas de todas as atividades cadastradas para um determinado usuário (currentUser) visando evitar inconsistência nos calculos de horas validas, visto que, no código fonte, pode haver alteração nas constantes. A cada login, a função é chamada
+ */
+async function recalcularHorasGlobal() {
     try {
         const tiposCadastrados = new Set();
         const atividades = await new Promise((resolve, reject) => {
@@ -1834,7 +2221,10 @@ async function recalcularHorasGlobal() { // Função auxiliar pra recalcular as 
     }
 }
 
-async function handleEdicaoSubmit(e) { // Função para Edição de atividades
+/**
+ * Função para Edição de atividades
+ */
+async function handleEdicaoSubmit(e) {
     e.preventDefault();
 
     // Obter o botão e configurar estado de carregamento
@@ -1854,7 +2244,7 @@ async function handleEdicaoSubmit(e) { // Função para Edição de atividades
 
     // Validações iniciais
     if (!nome || !tipoNovo || isNaN(horasNovas) || horasNovas < 0 || !periodoNovo) {
-        showSystemMessage("Preencha todos os campos obrigatórios", "error");
+        mostrarMensagemDoSistema("Preencha todos os campos obrigatórios", "error");
         submitBtn.innerHTML = originalText;
         submitBtn.disabled = false;
         return;
@@ -1863,7 +2253,7 @@ async function handleEdicaoSubmit(e) { // Função para Edição de atividades
     if (!validarPeriodo(periodoNovo, currentUser.matricula)) {
         const anoAtual = new Date().getFullYear();
         const anoIngresso = parseInt(currentUser.matricula.substring(0, 4), 10);
-        showSystemMessage(`Período inválido. Formato esperado: AAAA.S (ex: 2025.1) com ano entre ${anoIngresso}-${anoAtual}`, "error");
+        mostrarMensagemDoSistema(`Período inválido. Formato esperado: AAAA.S (ex: 2025.1) com ano entre ${anoIngresso}-${anoAtual}`, "error");
         submitBtn.innerHTML = originalText;
         submitBtn.disabled = false;
         return;
@@ -1880,7 +2270,7 @@ async function handleEdicaoSubmit(e) { // Função para Edição de atividades
         });
 
         if (!atividadeOriginal) {
-            showSystemMessage("Atividade não encontrada", "error");
+            mostrarMensagemDoSistema("Atividade não encontrada", "error");
             return;
         }
 
@@ -1889,7 +2279,7 @@ async function handleEdicaoSubmit(e) { // Função para Edição de atividades
         // PROCESSAR NOVO COMPROVANTE SE HOUVER
         let novoComprovante = atividadeOriginal.comprovante;
         if (comprovanteFile) {
-            novoComprovante = await fileToArrayBuffer(comprovanteFile);
+            novoComprovante = await arquivoParaArrayBuffer(comprovanteFile);
         }
 
         // Calcular novas horas validadas e definir o status
@@ -1951,14 +2341,14 @@ async function handleEdicaoSubmit(e) { // Função para Edição de atividades
 
         // Exibir mensagem de sucesso com base no status
         if (atividadeRecalculada.comprovante == null) {
-            showSystemMessage("Atividade atualizada com sucesso, porém sem comprovante comprobatório anexado.", "pending");
+            mostrarMensagemDoSistema("Atividade atualizada com sucesso, porém sem comprovante comprobatório anexado.", "pending");
         } else if (atividadeRecalculada.horasValidadas < horasNovas) {
             const motivo = atividadeRecalculada.horasValidadas === 0 ?
                 "limite global atingido para este tipo de atividade" :
                 "limites de horas atingidos";
-            showSystemMessage(`Atividade atualizada, mas apenas ${atividadeRecalculada.horasValidadas}h validadas (${motivo}).`, "success");
+            mostrarMensagemDoSistema(`Atividade atualizada, mas apenas ${atividadeRecalculada.horasValidadas}h validadas (${motivo}).`, "success");
         } else {
-            showSystemMessage("Atividade atualizada com sucesso!", "success");
+            mostrarMensagemDoSistema("Atividade atualizada com sucesso!", "success");
         }
 
         document.getElementById("formEdicao").reset();
@@ -1977,18 +2367,54 @@ async function handleEdicaoSubmit(e) { // Função para Edição de atividades
         // Restaurar o botão em caso de erro
         submitBtn.innerHTML = originalText;
         submitBtn.disabled = false;
-        showSystemMessage("Erro ao atualizar atividade: " + error, "error");
+        mostrarMensagemDoSistema("Erro ao atualizar atividade: " + error, "error");
     }
 }
 
-function limparEdicao() { // Função para limpar os campos da aba edição
-    // Limpa todos os campos da aba edição
+/**
+ * Função para limpar os campos da aba edição
+ */
+function limparEdicao() {
     document.getElementById("formEdicao").reset();
-    // Limpar info do comprovante atual
     document.getElementById("comprovanteAtualInfo").textContent = "";
+
+    // Resetar os componentes personalizados dos selects
+    const selects = ['tipoEdicao'];
+
+    selects.forEach(selectId => {
+        const originalSelect = document.getElementById(selectId);
+        if (!originalSelect) return;
+
+        // Resetar o select original
+        originalSelect.value = "";
+
+        // Atualizar o componente personalizado
+        const wrapper = originalSelect.previousElementSibling;
+        if (wrapper && wrapper.classList.contains('searchable-select-wrapper')) {
+            const selectText = wrapper.querySelector('.select-text');
+            if (selectText) {
+                selectText.textContent = "Selecione um tipo";
+            }
+
+            // Fechar dropdown se estiver aberto
+            const dropdown = wrapper.querySelector('.select-dropdown');
+            if (dropdown) {
+                dropdown.style.display = 'none';
+            }
+
+            // Limpar campo de pesquisa
+            const searchInput = wrapper.querySelector('.dropdown-search-input');
+            if (searchInput) {
+                searchInput.value = '';
+            }
+        }
+    });
 }
 
-async function atualizarResumo() { // Função para exibir Resumo e estatísticas
+/**
+ * Função para exibir Resumo e estatísticas
+ */
+async function atualizarResumo() {
     let totalHorasRegistradas = 0;
     let totalHorasValidadas = 0;
 
@@ -2027,7 +2453,10 @@ async function atualizarResumo() { // Função para exibir Resumo e estatística
     };
 }
 
-async function atualizarGraficoResumo() { // Função auxiliar para atualizar a exibição do Resumo e estatísticas
+/**
+ * Função auxiliar para atualizar a exibição do Resumo e estatísticas
+ */
+async function atualizarGraficoResumo() {
     const ctx = document.getElementById('hoursChart').getContext('2d');
 
     if (horasChart) {
@@ -2127,7 +2556,9 @@ async function atualizarGraficoResumo() { // Função auxiliar para atualizar a 
     };
 }
 
-// Variáveis globais para o preview do PDF
+/**
+ * Variáveis globais para o preview do PDF
+ */
 let __CURRENT_DOC = null;
 let __CURRENT_BLOBURL = null;
 
@@ -2171,7 +2602,7 @@ async function previewRelatorioABNT() {
 
     } catch (error) {
         console.error('Erro ao gerar preview:', error);
-        showSystemMessage("Erro ao gerar relatório: " + error.message, "error");
+        mostrarMensagemDoSistema("Erro ao gerar relatório: " + error.message, "error");
         // RESTAURAR O BOTÃO EM CASO DE ERRO
         btn.innerHTML = originalText;
         btn.disabled = false;
@@ -2203,7 +2634,7 @@ function fecharPreviewRelatorio() {
  */
 function baixarPdfAtual() {
     if (!__CURRENT_BLOBURL) {
-        showSystemMessage("Nenhum relatório gerado para baixar", "error");
+        mostrarMensagemDoSistema("Nenhum relatório gerado para baixar", "error");
         return;
     }
 
@@ -2222,11 +2653,13 @@ function baixarPdfAtual() {
 
     } catch (error) {
         console.error('Erro ao baixar PDF:', error);
-        showSystemMessage("Erro ao baixar o relatório", "error");
+        mostrarMensagemDoSistema("Erro ao baixar o relatório", "error");
     }
 }
 
-// Atualize a função handleImprimir para usar o novo nome
+/**
+ * Atualize a função handleImprimir para usar o novo nome
+ */
 async function handleImprimir() {
     // Verificar se já está processando para evitar duplo clique
     const btn = document.getElementById("imprimirBtn");
@@ -2237,20 +2670,18 @@ async function handleImprimir() {
     await previewRelatorioABNT();
 }
 
-// ---------- FUNÇÃO AUXILIAR PARA TESTE DE COMPROVANTES ----------
-
 /**
  * Função para verificar e validar comprovantes
  */
 async function verificarComprovantes() {
-    const atividades = await getAtividadesPorUsuario(currentUser.username);
+    const atividades = await obterAtividadesPorUsuario(currentUser.username);
     const comprovantesValidos = [];
     const comprovantesInvalidos = [];
 
     for (const atividade of atividades) {
         if (atividade.comprovante && atividade.comprovante.byteLength > 0) {
             try {
-                const info = await getPdfInfo(atividade.comprovante);
+                const info = await obterInformacoesPDF(atividade.comprovante);
                 if (info.isValid) {
                     comprovantesValidos.push({
                         id: atividade.id,
@@ -2283,12 +2714,10 @@ async function verificarComprovantes() {
     };
 }
 
-// ---------- FUNÇÕES PARA MANIPULAÇÃO DE PDFs ----------
-
 /**
- * Converte ArrayBuffer para PDFDocument do pdf-lib
+ * Converte ArrayBuffer para PDFDocument do pdf-lib (não está mais sendo usada)
  */
-async function arrayBufferToPdfDocument(arrayBuffer) {
+async function arrayBufferParaDocumentoPdf(arrayBuffer) {
     try {
         const { PDFDocument } = PDFLib;
         return await PDFDocument.load(arrayBuffer);
@@ -2472,7 +2901,7 @@ async function combinarPDFs(pdfs) {
 /**
  * Obtém informações básicas do PDF (número de páginas)
  */
-async function getPdfInfo(arrayBuffer) {
+async function obterInformacoesPDF(arrayBuffer) {
     try {
         const { PDFDocument } = PDFLib;
         const pdfDoc = await PDFDocument.load(arrayBuffer);
@@ -2498,7 +2927,7 @@ async function gerarRelatorioCompleto() {
         const relatorioArrayBuffer = await criarRelatorioCompletoABNT();
 
         // 2. Obter atividades ORDENADAS POR GRUPO (igual à tabela do relatório)
-        const atividades = await getAtividadesPorUsuario(currentUser.username);
+        const atividades = await obterAtividadesPorUsuario(currentUser.username);
         const atividadesAprovadas = atividades.filter(a => a.status === 'Aprovado');
 
         // 3. ORDENAR atividades na MESMA ORDEM da tabela do relatório (por grupo)
@@ -2562,7 +2991,6 @@ async function gerarRelatorioCompleto() {
 
 /**
  * Combina múltiplos PDFs em um único PDF
- */
 async function combinarPDFs(pdfs) {
     const { PDFDocument } = PDFLib;
     const mergedPdf = await PDFDocument.create();
@@ -2597,8 +3025,7 @@ async function combinarPDFs(pdfs) {
 
     return await mergedPdf.save();
 }
-
-// ---------- FUNÇÃO PRINCIPAL DO RELATÓRIO ABNT ----------
+ */
 
 /**
  * Cria o relatório completo no formato ABNT com numeração apenas na parte textual
@@ -2609,7 +3036,7 @@ async function criarRelatorioCompletoABNT() {
 
     // Obter dados do estudante e atividades
     const estudante = currentUser;
-    const atividades = await getAtividadesPorUsuario(currentUser.username);
+    const atividades = await obterAtividadesPorUsuario(currentUser.username);
     const atividadesAprovadas = atividades.filter(a => a.status === 'Aprovado');
 
     // Agrupar atividades aprovadas por grupo
@@ -3271,7 +3698,7 @@ async function criarRelatorioCompletoABNT() {
 /**
  * Obtém atividades do usuário para o relatório
  */
-function getAtividadesPorUsuario(usuario) {
+function obterAtividadesPorUsuario(usuario) {
     return new Promise((resolve, reject) => {
         const atividades = [];
         const transaction = db.transaction("atividades", "readonly");
@@ -3293,11 +3720,13 @@ function getAtividadesPorUsuario(usuario) {
     });
 }
 
-// Função para a Tela Administração do Sistema
+/**
+ * Função para a Tela Administração do Sistema
+ */
 function buscarUsuario() {
     const username = document.getElementById("filtroUsuario").value.trim();
     if (!username) {
-        showSystemMessage("Digite um nome de usuário", "error");
+        mostrarMensagemDoSistema("Digite um nome de usuário", "error");
         return;
     }
 
@@ -3311,13 +3740,13 @@ function buscarUsuario() {
             document.getElementById("adminUsername").value = user.username;
             document.getElementById("detalhesUsuario").classList.remove("hidden");
         } else {
-            showSystemMessage("Usuário não encontrado", "error");
+            mostrarMensagemDoSistema("Usuário não encontrado", "error");
             document.getElementById("detalhesUsuario").classList.add("hidden");
         }
     };
 
     request.onerror = function () {
-        showSystemMessage("Erro ao buscar usuário", "error");
+        mostrarMensagemDoSistema("Erro ao buscar usuário", "error");
     };
 }
 
@@ -3326,7 +3755,7 @@ function salvarUsuario() {
     const newPassword = document.getElementById("adminPassword").value.trim();
 
     if (!username) {
-        showSystemMessage("Nenhum usuário selecionado", "error");
+        mostrarMensagemDoSistema("Nenhum usuário selecionado", "error");
         return;
     }
 
@@ -3343,14 +3772,14 @@ function salvarUsuario() {
 
             const updateRequest = store.put(user);
             updateRequest.onsuccess = function () {
-                showSystemMessage("Usuário atualizado com sucesso", "success");
+                mostrarMensagemDoSistema("Usuário atualizado com sucesso", "success");
                 document.getElementById("adminPassword").value = "";
             };
             updateRequest.onerror = function () {
-                showSystemMessage("Erro ao atualizar usuário", "error");
+                mostrarMensagemDoSistema("Erro ao atualizar usuário", "error");
             };
         } else {
-            showSystemMessage("Usuário não encontrado", "error");
+            mostrarMensagemDoSistema("Usuário não encontrado", "error");
         }
     };
 }
@@ -3359,7 +3788,7 @@ function resetarUsuario() {
     const username = document.getElementById("adminUsername").value;
 
     if (!username) {
-        showSystemMessage("Nenhum usuário selecionado", "error");
+        mostrarMensagemDoSistema("Nenhum usuário selecionado", "error");
         return;
     }
 
@@ -3388,12 +3817,12 @@ function resetarUsuario() {
                 cursor.continue();
             } else {
                 if (error) {
-                    showSystemMessage(`Erro ao resetar atividades: ${error}`, "error");
+                    mostrarMensagemDoSistema(`Erro ao resetar atividades: ${error}`, "error");
                 } else {
                     const message = count > 0
                         ? `Resetadas ${count} atividades de ${username}`
                         : `Nenhuma atividade encontrada para ${username}`;
-                    showSystemMessage(message, "success");
+                    mostrarMensagemDoSistema(message, "success");
                 }
             }
         };
@@ -3406,26 +3835,26 @@ function resetarUsuario() {
 }
 
 // Mensagens do sistema
-function showError(message) {
+function mostrarErroMensagem(message) {
     const errorMessage = document.getElementById("errorMessage");
     errorMessage.querySelector("span").textContent = message;
     errorMessage.style.display = "flex";
     document.getElementById("successMessage").style.display = "none";
 }
 
-function showSuccess(message) {
+function mostrarSucessoMensagem(message) {
     const successMessage = document.getElementById("successMessage");
     successMessage.querySelector("span").textContent = message;
     successMessage.style.display = "flex";
     document.getElementById("errorMessage").style.display = "none";
 }
 
-function hideMessages() {
+function ocultarMensagens() {
     document.getElementById("errorMessage").style.display = "none";
     document.getElementById("successMessage").style.display = "none";
 }
 
-function showSystemMessage(message, type) {
+function mostrarMensagemDoSistema(message, type) {
     document.querySelectorAll('.system-message.temp').forEach(msg => msg.remove());
 
     const messageContainer = document.createElement("div");
