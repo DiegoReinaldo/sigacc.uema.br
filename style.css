@@ -1333,10 +1333,120 @@ body {
     color: var(--dark-blue);
 }
 
-/* Remova estilos antigos se existirem */
 .overlay,
 .preview-container,
 .preview-header,
 .preview-actions {
     display: none;
+}
+
+/* Estilos para selects com pesquisa integrada */
+.searchable-select-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.custom-select {
+    width: 100%;
+    padding: 8px 35px 8px 10px;
+    border: 1px solid #d1d1d1;
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+    position: relative;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    color: #333;
+    transition: border-color 0.3s ease;
+}
+
+.custom-select:hover {
+    border-color: #aaa;
+}
+
+.select-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.select-search-integrated-icon {
+    position: absolute;
+    right: 10px;
+    color: #666;
+    font-size: 14px;
+    pointer-events: none;
+}
+
+.select-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    display: none;
+    max-height: 300px;
+    overflow: hidden;
+}
+
+.dropdown-search-input {
+    width: 100%;
+    padding: 8px 10px;
+    border: none;
+    border-bottom: 1px solid #eee;
+    outline: none;
+    box-sizing: border-box;
+    font-size: 14px;
+}
+
+.dropdown-search-input:focus {
+    border-bottom-color: #4d90fe;
+}
+
+.select-options {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.select-option {
+    padding: 8px 10px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background-color 0.2s ease;
+    font-size: 14px;
+}
+
+.select-option:hover {
+    background-color: #f5f5f5;
+}
+
+.select-option:last-child {
+    border-bottom: none;
+}
+
+/* Ocultar completamente o select original */
+.hidden-original {
+    display: none !important;
+    position: absolute !important;
+    left: -9999px !important;
+}
+
+/* Garantir que o wrapper se integre bem com os formulários existentes */
+.form-group-main .searchable-select-wrapper {
+    margin-bottom: 0;
+}
+
+/* Estilo para quando não há resultados */
+.select-options .no-results {
+    padding: 10px;
+    color: #999;
+    text-align: center;
+    font-size: 14px;
 }
