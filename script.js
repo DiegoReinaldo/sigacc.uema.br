@@ -344,7 +344,7 @@ let isDev = false;
 let horasChart = null;
 
 // Inicialização do IndexedDB
-const request = indexedDB.open("para_teste", 15);
+const request = indexedDB.open("SIGACC_DB", 15);
 
 request.onupgradeneeded = function (event) {
     db = event.target.result;
@@ -3877,3 +3877,4 @@ function mostrarMensagemDoSistema(message, type) {
         messageContainer.remove();
     }, 5000);
 }
+
