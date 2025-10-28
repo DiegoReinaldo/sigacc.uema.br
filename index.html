@@ -15,8 +15,14 @@
     <script src="https://unpkg.com/downloadjs@1.4.7"></script>
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <script src="https://unpkg.com/downloadjs@1.4.7"></script>
+
     <link rel="stylesheet" href="style.css">
     <script src="script.js"></script>
+
+    <!--
+    <link rel="stylesheet" href="style-teste.css">
+    <script src="script-teste.js"></script>
+    -->
 </head>
 
 <body>
@@ -139,7 +145,7 @@
                         <div class="form-group-main">
                             <label for="tipo">Tipo de Atividade</label>
                             <select id="tipo" required>
-                                <option value="">Selecione um tipo</option>
+                                <!-- As opções serão preenchidas por JavaScript -->
                             </select>
                         </div>
 
@@ -189,7 +195,6 @@
                         <div class="form-group-main">
                             <label for="filtroGrupo">Grupo de Atividade</label>
                             <select id="filtroGrupo">
-                                <option value="Todos">Todos os grupos</option>
                                 <!-- As opções serão preenchidas por JavaScript -->
                             </select>
                         </div>
@@ -197,7 +202,6 @@
                         <div class="form-group-main">
                             <label for="filtroTipo">Tipo de Atividade</label>
                             <select id="filtroTipo">
-                                <option value="Todos">Todos os tipos</option>
                                 <!-- As opções serão preenchidas por JavaScript -->
                             </select>
                         </div>
@@ -450,10 +454,6 @@
             </div>
         </div>
     </div>
-
-    <!-- ===========================
-     JS: resizer (cole no final do body ou em um arquivo .js)
-     =========================== -->
     <script>
         (function () {
             const table = document.getElementById('activitiesTable');
@@ -468,7 +468,7 @@
                 return px ? parseFloat(px.replace('px', '')) : 0;
             }
 
-            // Adiciona listeners aos resizers já presentes no DOM (criamos eles no HTML)
+            // Adiciona listeners aos resizers já presentes no DOM
             const resizers = table.querySelectorAll('.resizer');
 
             resizers.forEach(resizer => {
@@ -502,8 +502,6 @@
 
                     // aplica largura em px diretamente no <col> correspondente
                     colgroup[colIndex].style.width = newWidth + 'px';
-
-                    // se quiser manter o cabeçalho bonito: também atualiza o th correspondente
                     if (ths[colIndex]) ths[colIndex].style.width = newWidth + 'px';
                 };
 
@@ -515,16 +513,12 @@
 
                     document.body.style.userSelect = '';
                     document.body.style.cursor = '';
-
-                    // opcional: guardar larguras no localStorage para persistir entre reloads
-                    // salvarLarguras();
                 };
 
                 resizer.addEventListener('mousedown', mouseDown);
                 resizer.addEventListener('touchstart', mouseDown, { passive: false });
             });
-
-            // ---- (opcional) persistência: recuperar larguras salvas (se quiser)
+            
             // Você pode habilitar este recurso comentando as linhas abaixo.
             function carregarLarguras() {
                 try {
@@ -534,7 +528,7 @@
                     arr.forEach((w, i) => {
                         if (colgroup[i] && w) colgroup[i].style.width = w;
                     });
-                } catch (e) { /* ignore */ }
+                } catch (e) {}
             }
             function salvarLarguras() {
                 const arr = Array.from(colgroup).map(c => c.style.width || window.getComputedStyle(c).width);
@@ -545,5 +539,3 @@
 </body>
 
 </html>
-
-
