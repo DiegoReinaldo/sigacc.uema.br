@@ -1,6 +1,6 @@
 // Constantes e configurações
-const HORAS_NECESSARIAS = 225;
-const CURSO_DE_GRADUACAO = 'Engenharia de Produção Bacharelado UEMA, Campus São Luis';
+const horasNecessarias = 225;
+const cursoDeGraduacao = 'Engenharia de Produção Bacharelado UEMA, Campus São Luis';
 
 const gruposAtividades = [ // Lista com os grupos temático dos tipos de atividades 
     'GRUPO I - Atividades de iniciação à pesquisa ou ensino ou atividades de extensão em áreas correlatas a Engenharia de Produção',
@@ -486,26 +486,10 @@ function adicionarPesquisaIntegradaAosSelects() {
         // Criar container
         const container = document.createElement('div');
         container.className = 'searchable-select-wrapper';
-        container.style.position = 'relative';
-        container.style.width = '100%';
 
         // Criar select personalizado
         const customSelect = document.createElement('div');
         customSelect.className = 'custom-select';
-        customSelect.style.cssText = `
-            width: 100%;
-            padding: 14px 35px 14px 14px;
-            border: 2px solid var(--light-gray);
-            border-radius: var(--border-radius);
-            background: white;
-            cursor: pointer;
-            position: relative;
-            min-height: 38px;
-            display: flex;
-            align-items: center;
-            font-size: 14px;
-            color: rgb(51, 51, 51);
-        `;
 
         // Texto do select - usa o texto da opção selecionada ou padrão
         const selectText = document.createElement('span');
@@ -514,63 +498,24 @@ function adicionarPesquisaIntegradaAosSelects() {
         // Define o texto baseado no select atual
         const selectedOption = originalSelect.options[originalSelect.selectedIndex];
         selectText.textContent = selectedOption ? selectedOption.text : 'Selecione uma opção';
-        selectText.style.cssText = `
-            flex: 1;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        `;
 
-        // Ícone de lupa
+        // Ícone de lupa - MESMO POSICIONAMENTO DO ÍCONE DE INFORMAÇÃO
         const searchIcon = document.createElement('i');
         searchIcon.className = 'fas fa-search select-search-integrated-icon';
-        searchIcon.style.cssText = `
-            position: absolute;
-            right: 10px;
-            color: #666;
-            font-size: 14px;
-        `;
 
         // Dropdown com pesquisa
         const dropdown = document.createElement('div');
         dropdown.className = 'select-dropdown';
-        dropdown.style.cssText = `
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background: white;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            z-index: 1000;
-            display: none;
-            max-height: 300px;
-            overflow: hidden;
-        `;
 
         // Input de pesquisa dentro do dropdown
         const searchInput = document.createElement('input');
         searchInput.type = 'text';
         searchInput.placeholder = 'Pesquisar...';
         searchInput.className = 'dropdown-search-input';
-        searchInput.style.cssText = `
-            width: 100%;
-            padding: 8px 10px;
-            border: none;
-            border-bottom: 1px solid #eee;
-            outline: none;
-            box-sizing: border-box;
-            font-size: 14px;
-        `;
 
         // Lista de opções
         const optionsList = document.createElement('div');
         optionsList.className = 'select-options';
-        optionsList.style.cssText = `
-            max-height: 250px;
-            overflow-y: auto;
-        `;
 
         // Adicionar elementos ao DOM
         customSelect.appendChild(selectText);
@@ -580,14 +525,11 @@ function adicionarPesquisaIntegradaAosSelects() {
         container.appendChild(customSelect);
         container.appendChild(dropdown);
 
-        // Substituir o select original
+        // Substituir o select original - inserir ANTES do select original
         originalSelect.parentNode.insertBefore(container, originalSelect);
 
         // Ocultar completamente o select original
         originalSelect.classList.add('hidden-original');
-        originalSelect.style.display = 'none';
-        originalSelect.style.position = 'absolute';
-        originalSelect.style.left = '-9999px';
 
         // Popular opções
         function populateOptions(filter = '') {
@@ -599,13 +541,8 @@ function adicionarPesquisaIntegradaAosSelects() {
 
             if (filteredOptions.length === 0) {
                 const noResults = document.createElement('div');
+                noResults.className = 'no-results';
                 noResults.textContent = 'Nenhum resultado encontrado';
-                noResults.style.cssText = `
-                    padding: 10px;
-                    color: #999;
-                    text-align: center;
-                    font-size: 14px;
-                `;
                 optionsList.appendChild(noResults);
                 return;
             }
@@ -614,13 +551,6 @@ function adicionarPesquisaIntegradaAosSelects() {
                 const optionDiv = document.createElement('div');
                 optionDiv.className = 'select-option';
                 optionDiv.textContent = option.text;
-                optionDiv.style.cssText = `
-                    padding: 8px 10px;
-                    cursor: pointer;
-                    border-bottom: 1px solid #f0f0f0;
-                    font-size: 14px;
-                    transition: background-color 0.2s ease;
-                `;
 
                 optionDiv.addEventListener('mouseenter', function () {
                     this.style.backgroundColor = '#f5f5f5';
@@ -635,6 +565,7 @@ function adicionarPesquisaIntegradaAosSelects() {
                     selectText.textContent = option.text;
                     dropdown.style.display = 'none';
                     searchInput.value = '';
+                    customSelect.classList.remove('active');
 
                     // Disparar evento change no select original
                     const event = new Event('change', { bubbles: true });
@@ -652,8 +583,11 @@ function adicionarPesquisaIntegradaAosSelects() {
             dropdown.style.display = isOpen ? 'none' : 'block';
 
             if (!isOpen) {
+                customSelect.classList.add('active');
                 populateOptions();
                 setTimeout(() => searchInput.focus(), 10);
+            } else {
+                customSelect.classList.remove('active');
             }
         });
 
@@ -664,6 +598,7 @@ function adicionarPesquisaIntegradaAosSelects() {
         searchInput.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
                 dropdown.style.display = 'none';
+                customSelect.classList.remove('active');
             }
             if (e.key === 'Enter') {
                 const firstOption = optionsList.querySelector('.select-option');
@@ -676,6 +611,7 @@ function adicionarPesquisaIntegradaAosSelects() {
         // Fechar dropdown ao clicar fora
         document.addEventListener('click', function () {
             dropdown.style.display = 'none';
+            customSelect.classList.remove('active');
             searchInput.value = '';
             populateOptions();
         });
@@ -886,7 +822,7 @@ function handleLoginSubmit(e) {
                 currentUser = {
                     username: "admin",
                     nomeCompleto: "Administrador do Sistema",
-                    matricula: ""
+                    matricula: "20090000000"
                 };
                 iniciarApp();
             } else if (isLoginMode) {
@@ -1053,6 +989,7 @@ function logout() {
         document.getElementById("formCadastro").reset();
 
         ocultarMensagens();
+        removerAbaDesenvolvedor(); // se estiver logado como desenvolvedor, fecha a aba admim
 
         submitBtn.innerHTML = 'Entrar';
         submitBtn.disabled = false;
@@ -1172,7 +1109,7 @@ async function handleCadastroSubmit(e) { // Cadastro de atividades
                 mostrarMensagemDoSistema("Atividade cadastrada com sucesso!", "success");
             }
 
-            document.getElementById("formCadastro").reset();
+            limparCadastro();
             atualizarTabela();
             atualizarResumo();
         };
@@ -1407,7 +1344,7 @@ function limparCadastro() {
         if (wrapper && wrapper.classList.contains('searchable-select-wrapper')) {
             const selectText = wrapper.querySelector('.select-text');
             if (selectText) {
-                selectText.textContent = "Selecione um tipo";
+                selectText.textContent = "Selecione uma opção";
             }
 
             // Fechar dropdown se estiver aberto
@@ -1754,7 +1691,7 @@ async function exportarDados() {
         const zip = new JSZip();
 
         // 1. Criar arquivo CSV com proteção de curso e dados do usuário
-        let csvContent = `Curso�${CURSO_DE_GRADUACAO}\n`; // Linha de proteção
+        let csvContent = `Curso�${cursoDeGraduacao}\n`; // Linha de proteção
         // Adicionar linha com dados do usuário
         csvContent += `Dados do usuário�${currentUser.nomeCompleto}�${currentUser.username}�${currentUser.matricula}�${currentUser.password}\n`;
         csvContent += "ID�Nome�Tipo�Horas Registradas�Horas Validadas�Período�Status\n";
@@ -1825,8 +1762,8 @@ async function importarDados() {
             }
 
             const partesCurso = primeiraLinha.split('�');
-            if (partesCurso.length < 2 || partesCurso[1] !== CURSO_DE_GRADUACAO) {
-                throw new Error(`Arquivo incompatível! Este arquivo pertence ao curso: ${partesCurso[1]}. O sistema atual é configurado para: ${CURSO_DE_GRADUACAO}.`);
+            if (partesCurso.length < 2 || partesCurso[1] !== cursoDeGraduacao) {
+                throw new Error(`Arquivo incompatível! Este arquivo pertence ao curso: ${partesCurso[1]}. O sistema atual é configurado para: ${cursoDeGraduacao}.`);
             }
 
             // 2. Mapear comprovantes
@@ -2259,6 +2196,11 @@ async function handleEdicaoSubmit(e) {
         return;
     }
 
+    if (tipo === 'padrao') {
+        mostrarMensagemDoSistema("Selecione um tipo de atividade", "error");
+        return;
+    }
+
     try {
         const atividadeOriginal = await new Promise((resolve, reject) => {
             const transaction = db.transaction("atividades", "readonly");
@@ -2393,7 +2335,7 @@ function limparEdicao() {
         if (wrapper && wrapper.classList.contains('searchable-select-wrapper')) {
             const selectText = wrapper.querySelector('.select-text');
             if (selectText) {
-                selectText.textContent = "Selecione um tipo";
+                selectText.textContent = "Selecione uma opção";
             }
 
             // Fechar dropdown se estiver aberto
@@ -2432,7 +2374,7 @@ async function atualizarResumo() {
             }
             cursor.continue();
         } else {
-            const progressoTotal = Math.min(100, Math.round((totalHorasValidadas / HORAS_NECESSARIAS) * 100));
+            const progressoTotal = Math.min(100, Math.round((totalHorasValidadas / horasNecessarias) * 100));
 
             document.getElementById("resumoHorasRegistradas").textContent = totalHorasRegistradas;
             document.getElementById("resumoHorasValidadas").textContent = totalHorasValidadas;
@@ -2443,7 +2385,7 @@ async function atualizarResumo() {
             document.getElementById("progressoTotalPercent").textContent = `${progressoTotal}%`;
             document.getElementById("progressoTotalFill").style.width = `${progressoTotal}%`;
 
-            document.getElementById("horasValidadasPercent").textContent = `${totalHorasValidadas}/${HORAS_NECESSARIAS}`;
+            document.getElementById("horasValidadasPercent").textContent = `${totalHorasValidadas}/${horasNecessarias}`;
             document.getElementById("horasValidadasFill").style.width = `${progressoTotal}%`;
 
             if (document.getElementById("resumo").classList.contains("active")) {
@@ -2488,7 +2430,7 @@ async function atualizarGraficoResumo() {
             cursor.continue();
         } else {
             const totalHorasValidadas = Object.values(horasPorGrupo).reduce((a, b) => a + b, 0);
-            const horasRestantes = Math.max(0, HORAS_NECESSARIAS - totalHorasValidadas);
+            const horasRestantes = Math.max(0, horasNecessarias - totalHorasValidadas);
 
             const labels = [];
             const data = [];
@@ -2573,8 +2515,8 @@ async function previewRelatorioABNT() {
     }
 
     const btn = document.getElementById("imprimirBtn");
-    const originalText = '<i class="fas fa-print"></i> Visualizar PDF';
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando PDF...';
+    const originalText = '<i class="fas fa-print"></i> Visualizar Relatório';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando Relatório...';
     btn.disabled = true;
 
     try {
@@ -3876,5 +3818,9 @@ function mostrarMensagemDoSistema(message, type) {
     setTimeout(() => {
         messageContainer.remove();
     }, 5000);
+<<<<<<< Updated upstream
 }
 
+=======
+}
+>>>>>>> Stashed changes

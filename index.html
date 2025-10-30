@@ -138,8 +138,14 @@
                 <form id="formCadastro">
                     <div class="form-grid">
                         <div class="form-group-main">
-                            <label for="nome">Nome da Atividade</label>
+                            <label for="nome">Descrição da Atividade</label>
                             <input type="text" id="nome" placeholder="Ex: Participação em congresso" required>
+
+                            <!--<div class="info-tooltip">
+                                Descreva a atividade de forma que seja possivel identificá-la, pois será essa informação
+                                que será exibida na tabela do relatório. Ex.: "Participação na maratona Excel para
+                                Gestão e Controle do Iniciante ao Avançado"
+                            </div>-->
                         </div>
 
                         <div class="form-group-main">
@@ -151,10 +157,12 @@
 
                         <div class="form-group-main">
                             <label for="horas">Horas Registradas</label>
-                            <input type="number" id="horas" placeholder="Ex: 100" min="0" step="0.1" required>
-                            <i class="fas fa-info-circle info-icon"></i>
-                            <div class="info-tooltip">
-                                Quantidade total de horas que você dedicou a esta atividade
+                            <div class="input-container">
+                                <input type="number" id="horas" placeholder="Ex: 100" min="0" step="0.1" required>
+                                <i class="fas fa-info-circle info-icon"></i>
+                                <div class="info-tooltip">
+                                    Quantidade total de horas que você dedicou a esta atividade
+                                </div>
                             </div>
                         </div>
 
@@ -307,7 +315,7 @@
                     <input type="hidden" id="idEdicao">
                     <div class="form-grid">
                         <div class="form-group-main">
-                            <label for="nomeEdicao">Nome da Atividade</label>
+                            <label for="nomeEdicao">Descrição da Atividade</label>
                             <input type="text" id="nomeEdicao" required>
                         </div>
 
@@ -454,6 +462,10 @@
             </div>
         </div>
     </div>
+
+    <!-- ===========================
+     JS: resizer (cole no final do body ou em um arquivo .js)
+     =========================== -->
     <script>
         (function () {
             const table = document.getElementById('activitiesTable');
@@ -468,7 +480,7 @@
                 return px ? parseFloat(px.replace('px', '')) : 0;
             }
 
-            // Adiciona listeners aos resizers já presentes no DOM
+            // Adiciona listeners aos resizers já presentes no DOM (criamos eles no HTML)
             const resizers = table.querySelectorAll('.resizer');
 
             resizers.forEach(resizer => {
@@ -502,6 +514,8 @@
 
                     // aplica largura em px diretamente no <col> correspondente
                     colgroup[colIndex].style.width = newWidth + 'px';
+
+                    // se quiser manter o cabeçalho bonito: também atualiza o th correspondente
                     if (ths[colIndex]) ths[colIndex].style.width = newWidth + 'px';
                 };
 
@@ -513,12 +527,16 @@
 
                     document.body.style.userSelect = '';
                     document.body.style.cursor = '';
+
+                    // opcional: guardar larguras no localStorage para persistir entre reloads
+                    // salvarLarguras();
                 };
 
                 resizer.addEventListener('mousedown', mouseDown);
                 resizer.addEventListener('touchstart', mouseDown, { passive: false });
             });
-            
+
+            // ---- (opcional) persistência: recuperar larguras salvas (se quiser)
             // Você pode habilitar este recurso comentando as linhas abaixo.
             function carregarLarguras() {
                 try {
@@ -528,7 +546,7 @@
                     arr.forEach((w, i) => {
                         if (colgroup[i] && w) colgroup[i].style.width = w;
                     });
-                } catch (e) {}
+                } catch (e) { /* ignore */ }
             }
             function salvarLarguras() {
                 const arr = Array.from(colgroup).map(c => c.style.width || window.getComputedStyle(c).width);
