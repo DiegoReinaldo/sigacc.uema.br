@@ -3818,9 +3818,4 @@ function mostrarMensagemDoSistema(message, type) {
     setTimeout(() => {
         messageContainer.remove();
     }, 5000);
-<<<<<<< Updated upstream
 }
-
-=======
-}
->>>>>>> Stashed changes
