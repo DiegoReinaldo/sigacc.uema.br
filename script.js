@@ -3827,8 +3827,4 @@ function mostrarMensagemDoSistema(message, type) {
     setTimeout(() => {
         messageContainer.remove();
     }, 5000);
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> cbfdbb4 (Atualizações na exibição dos elementos e modificações no style)
