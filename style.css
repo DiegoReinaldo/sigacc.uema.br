@@ -961,6 +961,7 @@ body {
     margin-bottom: 0;
 }
 
+.custom-select-edicao,
 .custom-select {
     width: 100%;
     padding: clamp(0.75rem, 2vw, 0.875rem) 35px clamp(0.75rem, 2vw, 0.875rem) clamp(0.75rem, 2vw, 0.875rem);
@@ -978,15 +979,18 @@ body {
     min-width: 0;
 }
 
+.custom-select-edicao:hover,
 .custom-select:hover {
     border-color: var(--medium-gray);
 }
 
+.custom-select-edicao.active,
 .custom-select.active {
     border-color: var(--orange);
     box-shadow: 0 0 0 3px rgba(243, 115, 33, 0.2);
 }
 
+.select-text-edicao,
 .select-text {
     flex: 1;
     overflow: hidden;
@@ -1397,10 +1401,12 @@ body {
         justify-content: center;
     }
 
+    .select-text-edicao,
     .select-text {
         max-width: 200px;
     }
 
+    .custom-select-edicao,
     .custom-select {
         padding: 12px 35px 12px 12px;
         min-height: 42px;
@@ -1499,6 +1505,7 @@ body {
         width: 100%;
     }
 
+    .custom-select-edicao,
     .custom-select {
         padding: 10px 35px 10px 10px;
         min-height: 40px;
@@ -1560,11 +1567,13 @@ body {
         font-size: 12px;
     }
 
+    .select-text-edicao,
     .select-text {
         max-width: 150px;
         font-size: 14px;
     }
 
+    .custom-select-edicao,
     .custom-select {
         padding: 8px 30px 8px 8px;
     }

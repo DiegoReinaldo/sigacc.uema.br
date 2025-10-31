@@ -488,12 +488,23 @@ function adicionarPesquisaIntegradaAosSelects() {
         container.className = 'searchable-select-wrapper';
 
         // Criar select personalizado
-        const customSelect = document.createElement('div');
-        customSelect.className = 'custom-select';
+        let customSelect, selectText;
 
-        // Texto do select - usa o texto da opção selecionada ou padrão
-        const selectText = document.createElement('span');
-        selectText.className = 'select-text';
+        if (selectId === 'tipoEdicao') {
+            customSelect = document.createElement('div');
+            customSelect.className = 'custom-select-edicao';
+
+            // Texto do select - usa o texto da opção selecionada ou padrão
+            selectText = document.createElement('span');
+            selectText.className = 'select-text-edicao';
+        } else {
+            customSelect = document.createElement('div');
+            customSelect.className = 'custom-select';
+
+            // Texto do select - usa o texto da opção selecionada ou padrão
+            selectText = document.createElement('span');
+            selectText.className = 'select-text';
+        }
 
         // Define o texto baseado no select atual
         const selectedOption = originalSelect.options[originalSelect.selectedIndex];
@@ -1879,6 +1890,9 @@ function carregarEdicao(id) { // Função para Edição de atividades
             document.getElementById("idEdicao").value = atividade.id;
             document.getElementById("nomeEdicao").value = atividade.nome;
             document.getElementById("tipoEdicao").value = atividade.tipo;
+            // Atualiza o select para exibir o tipo da atividade carregada
+            document.querySelector('.custom-select-edicao .select-text-edicao').textContent = atividade.tipo;
+
             document.getElementById("horasEdicao").value = atividade.horasRegistradas;
             document.getElementById("periodoEdicao").value = atividade.periodo;
 
@@ -2196,11 +2210,6 @@ async function handleEdicaoSubmit(e) {
         return;
     }
 
-    if (tipo === 'padrao') {
-        mostrarMensagemDoSistema("Selecione um tipo de atividade", "error");
-        return;
-    }
-
     try {
         const atividadeOriginal = await new Promise((resolve, reject) => {
             const transaction = db.transaction("atividades", "readonly");
@@ -2333,7 +2342,7 @@ function limparEdicao() {
         // Atualizar o componente personalizado
         const wrapper = originalSelect.previousElementSibling;
         if (wrapper && wrapper.classList.contains('searchable-select-wrapper')) {
-            const selectText = wrapper.querySelector('.select-text');
+            const selectText = wrapper.querySelector('.select-text-edicao');
             if (selectText) {
                 selectText.textContent = "Selecione uma opção";
             }
@@ -3818,4 +3827,8 @@ function mostrarMensagemDoSistema(message, type) {
     setTimeout(() => {
         messageContainer.remove();
     }, 5000);
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> cbfdbb4 (Atualizações na exibição dos elementos e modificações no style)
