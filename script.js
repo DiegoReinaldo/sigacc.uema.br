@@ -3015,11 +3015,11 @@ async function criarRelatorioCompletoABNT() {
 
     const introducao_p1 = "De acordo com o disposto no Regulamento das Atividades Complementares do Curso de Engenharia de Produção da Universidade Estadual do Maranhão – 3ª atualização, é obrigatório ao discente do curso o cumprimento de 225 (duzentas e vinte e cinco) horas de Atividades Complementares (ACs). Este requisito, essencial para a obtenção do grau de Bacharel em Engenharia de Produção, está em consonância com as Resoluções CNE No. 02, de 24 de abril de 2019, e CONSUN/UEMA No. 1.369/2019, de 21 de março de 2019.";
 
-    const introducao_p2 = "Conforme estabelecido no Art. 1º do referido regulamento, as Atividades Complementares visam proporcionar flexibilização curricular e o desenvolvimento da autonomia do discente, incentivando sua participação em atividades de caráter científico, acadêmico, cultural ou social que contribuam para o enriquecimento de sua formação profissional.";
+    const introducao_p2 = "Conforme estabelecido no Art. 1º do referido regulamento, as Atividades Complementares visam proporcionar flexibilização curricular e o desenvolvimento da autonomia do(a) discente, incentivando sua participação em atividades de caráter científico, acadêmico, cultural ou social que contribuam para o enriquecimento de sua formação profissional.";
 
     const introducao_p3 = "Para a integralização desta carga horária, o Art. 5º determina que as 225 horas devem ser distribuídas em, no mínimo, 3 (três) dos 6 (seis) grupos de atividades descritos no Anexo A do regulamento, respeitando os limites máximos de pontuação por atividade e por grupo.";
 
-    const objetivo_p1 = "Com o intuito de cumprir este requisito obrigatório para a graduação, o presente relatório tem como objetivo detalhar e comprovar as atividades realizadas pelo discente " + nomeAluno + " ao longo de sua trajetória acadêmica.";
+    const objetivo_p1 = "Com o intuito de cumprir este requisito obrigatório para a graduação, o presente relatório tem como objetivo detalhar e comprovar as atividades realizadas pelo(a) discente " + nomeAluno + " ao longo de sua trajetória acadêmica.";
 
     const objetivo_p2 = "Em atendimento ao Art. 1º, § 2º, este documento serve como base para o requerimento de avaliação das atividades perante a Diretoria do Curso, apresentando de forma organizada:";
 
@@ -3027,9 +3027,9 @@ async function criarRelatorioCompletoABNT() {
     const objetivo_itemB = "b) A carga horária pleiteada para cada atividade.";
     const objetivo_itemC = "c) Os documentos comprobatórios que atestam a realização das mesmas (em anexo).";
 
-    const metodologia_p1 = "As atividades desenvolvidas pelo discente foram catalogadas e classificadas conforme os grupos estabelecidos no Anexo A do regulamento. A seguir, é apresentada uma tabela-resumo que consolida todas as atividades realizadas, permitindo uma visão clara do atendimento aos critérios de distribuição e carga horária total.";
+    const metodologia_p1 = "As atividades desenvolvidas pelo(a) discente foram catalogadas e classificadas conforme os grupos estabelecidos no Anexo A do regulamento. A seguir, é apresentada uma tabela-resumo que consolida todas as atividades realizadas, permitindo uma visão clara do atendimento aos critérios de distribuição e carga horária total.";
 
-    const metodologia_p2 = "O discente buscou cumprir a exigência de, no mínimo, três grupos distintos, assegurando uma formação complementar diversificada, tal como preconizam os objetivos das ACs.";
+    const metodologia_p2 = "O(a) discente buscou cumprir a exigência de, no mínimo, três grupos distintos, assegurando uma formação complementar diversificada, tal como preconizam os objetivos das ACs.";
 
     const orientador = "Prof. Dr. Wellinton de Assunção";
     const cargoOrientador = "Docente da Disciplina de Atividades Complementares";
@@ -3580,7 +3580,7 @@ async function criarRelatorioCompletoABNT() {
     doc.text("5. CONSIDERAÇÕES FINAIS", margemEsquerda + (0.63 * 10), cursorY, { align: 'left' });
     cursorY += EspacamentoEntreLinhas + (4 * pts_em_mm);
 
-    const consideracoes_p1 = `O discente ${nomeAluno} concluiu a carga horária total de ${totalHorasValidadas} horas de Atividades Complementares, distribuídas em ${gruposComAtividades} grupos, conforme exigido. Todas as atividades aqui relatadas possuem documentação comprobatória válida, que é anexada a este processo para a devida análise e parecer do professor responsável, nos termos do Art. 2º do regulamento.`;
+    const consideracoes_p1 = `O(a) discente ${nomeAluno} concluiu a carga horária total de ${totalHorasValidadas} horas de Atividades Complementares, distribuídas em ${gruposComAtividades} grupos, conforme exigido. Todas as atividades aqui relatadas possuem documentação comprobatória válida, que é anexada a este processo para a devida análise e parecer do professor responsável, nos termos do Art. 2º do regulamento.`;
 
     const consideracoes_p2 = "Espera-se, portanto, a apreciação e a homologação das horas pleiteadas para a integralização deste componente curricular obrigatório.";
 
@@ -3828,3 +3828,4 @@ function mostrarMensagemDoSistema(message, type) {
         messageContainer.remove();
     }, 5000);
 }
+
