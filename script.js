@@ -895,9 +895,9 @@ function validarMatricula(matricula) {
     // Verifica o ano atual
     const anoAtual = new Date().getFullYear()
 
-    // Os 4 primeiros dígitos devem ser um ano entre 2000 e ano atual
+    // Os 4 primeiros dígitos devem ser um ano entre 2008 e ano atual
     const ano = parseInt(matricula.substring(0, 4), 10);
-    return ano >= 2000 && ano <= anoAtual;
+    return ano >= 2008 && ano <= anoAtual;
 }
 
 function toggleLoginMode() {
